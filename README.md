@@ -8,8 +8,12 @@ pago y opción de imprimirlo o guardarlo en PDF.
 Trabajo Final de Máster — Máster en Desarrollo con Inteligencia Artificial
 (BIG School). Desarrollado con asistencia de IA y documentado fase a fase.
 
-> **Estado: en desarrollo (Fase 1 de 11 completada).**
-> La URL de la aplicación desplegada se añadirá aquí en cuanto esté publicada.
+**🔗 Aplicación en funcionamiento: https://configurador-presupuestos.vercel.app**
+
+> **Estado: en desarrollo (Fase 1 de 11 completada).** La aplicación ya está
+> desplegada y se actualiza automáticamente con cada `push`, pero todavía
+> muestra datos de ejemplo: el catálogo real y el cálculo del presupuesto
+> llegan en las fases 2 y 3.
 
 ## Stack tecnológico
 
@@ -22,7 +26,7 @@ Trabajo Final de Máster — Máster en Desarrollo con Inteligencia Artificial
 | Tests E2E                            | Playwright _(Fase 8)_      |
 | Calidad de código                    | ESLint 10 + Prettier 3     |
 | Integración continua                 | GitHub Actions _(Fase 9)_  |
-| Despliegue                           | Vercel                     |
+| Despliegue                           | Vercel (plan Hobby)        |
 
 No hay backend, ni base de datos, ni autenticación: todo el cálculo ocurre en el
 navegador. Los borradores se guardan en `localStorage`.
@@ -86,6 +90,30 @@ global) y `e2e/` (tests de Playwright).
 - Datos del cliente, número de presupuesto y validez
 - Vista imprimible del presupuesto, para guardar como PDF desde el navegador
 - Borradores guardados en el navegador
+
+## Despliegue
+
+La aplicación está desplegada en **Vercel** (plan Hobby, gratuito) y conectada
+al repositorio: cada `push` a `main` genera un despliegue nuevo
+automáticamente. No hace falta configurar nada más, porque Vercel detecta Vite y
+sirve el contenido de `dist/`.
+
+El proyecto **no usa ninguna variable de entorno**, de modo que no hay secretos
+que gestionar en el despliegue ([ADR 0002](docs/adr/0002-sin-backend.md)).
+
+`vercel.json` añade cuatro cabeceras de seguridad a todas las respuestas:
+
+| Cabecera                                           | Para qué                                          |
+| -------------------------------------------------- | ------------------------------------------------- |
+| `X-Content-Type-Options: nosniff`                  | el navegador no adivina el tipo de archivo        |
+| `Referrer-Policy: strict-origin-when-cross-origin` | no se filtra la URL completa al salir del sitio   |
+| `X-Frame-Options: DENY`                            | la página no puede incrustarse en un iframe ajeno |
+| `Permissions-Policy`                               | cámara, micrófono y geolocalización desactivados  |
+
+HTTPS y `Strict-Transport-Security` los sirve Vercel por defecto. La
+`Content-Security-Policy` se añadirá en la Fase 10, cuando la aplicación esté
+terminada y pueda probarse en un despliegue de vista previa: es la única
+cabecera que puede dejar la página en blanco si se escribe mal.
 
 ## Metodología
 

@@ -5,6 +5,8 @@
 autorización para el despliegue en Vercel y para la Fase 2.
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**privado** hasta la Fase 10)
+**Aplicación desplegada:** https://configurador-presupuestos.vercel.app
+(**pública**, como exige la entrega)
 **Entrega:** 30/11/2026 — días 29 y 30 reservados para slides y vídeo.
 
 ---
@@ -15,7 +17,7 @@ autorización para el despliegue en Vercel y para la Fase 2.
 | ---- | ---------------------------------------------------------------------------- | --------------------- |
 | 0    | Preparación del entorno                                                      | ✅ cerrada 23/11/2026 |
 | 1    | Proyecto inicial, Tailwind, Vitest, Git y `ServiceCard` con TDD              | ✅ cerrada 24/11/2026 |
-| —    | **Despliegue adelantado en Vercel** (decisión del apartado 9.2 de la Fase 0) | ⏭️ siguiente          |
+| —    | **Despliegue adelantado en Vercel** (decisión del apartado 9.2 de la Fase 0) | ✅ hecho 24/11/2026   |
 | 2    | Tipos de TypeScript y catálogo de servicios                                  | pendiente             |
 | 3    | Lógica de negocio con TDD: formato de euros, subtotales, IGIC                | pendiente             |
 | 4    | Componentes del presupuesto con TDD                                          | pendiente             |
@@ -106,6 +108,37 @@ llamada a `onToggle` y el estado `aria-pressed` en ambos sentidos.
 - Autenticación resuelta por Git Credential Manager, que ya está configurado en
   el ámbito de máquina. No fue necesario crear ningún token a mano.
 
+### Despliegue en Vercel (adelantado, apartado 9.2 de la Fase 0)
+
+- Desplegado en **plan Hobby**, gratuito y sin tarjeta, en
+  https://configurador-presupuestos.vercel.app
+- La aplicación de GitHub de Vercel tiene acceso **solo a este repositorio**
+  («Only select repositories»), no a toda la cuenta.
+- Redespliegue automático en cada `push` a `main`.
+- Sin variables de entorno: no hay secretos que gestionar en el despliegue.
+- `vercel.json` con cuatro cabeceras de seguridad: `X-Content-Type-Options`,
+  `Referrer-Policy`, `X-Frame-Options` y `Permissions-Policy`. La
+  `Content-Security-Policy` se deja para la Fase 10, por ser la única que puede
+  romper la página si se escribe mal.
+
+**Verificaciones sobre la URL de producción:**
+
+| Comprobación                                                                             | Resultado                                                                                                            |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Acceso sin iniciar sesión (ventana de incógnito)                                         | correcto, HTTP 200                                                                                                   |
+| Recursos `.js`, `.css` y `favicon.svg`                                                   | HTTP 200, y **del mismo tamaño exacto que el build local** (221.829 y 11.877 bytes): Vercel compiló los mismos bytes |
+| Tailwind compilado en el servidor                                                        | `sr-only`, `bg-slate-900`, `grid-cols-3` y `focus-visible:outline-2` presentes en el CSS publicado                   |
+| Accesibilidad en el JS publicado                                                         | `aria-pressed` y `aria-hidden` presentes                                                                             |
+| _Sourcemaps_ (`.js.map`, `.css.map`)                                                     | HTTP 404: el código fuente no queda expuesto                                                                         |
+| Documentación y configuración (`CLAUDE.md`, `docs/`, `package.json`, `src/`, `.vscode/`) | HTTP 404: no se publica nada del repositorio                                                                         |
+| Rutas sensibles (`/.git/config`, `/.git/HEAD`, `/.env`)                                  | HTTP 404                                                                                                             |
+| HTTPS y `Strict-Transport-Security`                                                      | lo sirve Vercel por defecto: `max-age=63072000; includeSubDomains; preload`                                          |
+
+**Anotado para la Fase 10:** Vercel envía `Access-Control-Allow-Origin: *` en
+todas las respuestas. No supone un problema aquí —el contenido es público, no
+hay sesión ni datos privados que otro sitio pueda leer— pero conviene revisarlo
+al escribir la CSP.
+
 ### Documentación
 
 - `CLAUDE.md`, `PROGRESO.md` y `README.md` creados.
@@ -158,8 +191,7 @@ llamada a `onToggle` y el estado `aria-pressed` en ambos sentidos.
 
 ## Siguiente paso
 
-1. Despliegue en Vercel, conectado al repositorio de GitHub (apartado 9.2 del
-   inventario de la Fase 0).
-2. Fase 2: tipos de TypeScript y catálogo de servicios agrupado por categorías.
+**Fase 2:** tipos de TypeScript, archivo de datos de servicios y catálogo
+agrupado por categorías. Sustituirá los datos provisionales de `App.tsx`.
 
-Ninguno de los dos se inicia sin autorización expresa del usuario.
+No se inicia sin autorización expresa del usuario.
