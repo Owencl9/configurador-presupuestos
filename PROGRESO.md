@@ -4,8 +4,8 @@
 **Fase actual:** **Fase 4 completada**. El presupuesto funciona de punta a
 punta en el navegador: añadir servicios, elegir cantidad y meses con sus
 mínimos, y el resumen con los tres bloques de pago, su IGIC y su total. 190
-tests en verde. Probado en local por el usuario. Pendiente de commit y de
-verificación en producción.
+tests en verde. Probado en el navegador por el usuario en local y en
+producción, y **verificado en producción** (commit `259552a`).
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**privado** hasta la Fase 10)
 **Aplicación desplegada:** https://configurador-presupuestos.vercel.app
@@ -671,6 +671,43 @@ respecto a la Fase 1.
 **El JS ha crecido 8 kB, y era lo previsto.** La Fase 3 dejó anotado que el
 cálculo no estaba en el paquete publicado porque ningún componente lo
 importaba, y que entraría en la Fase 4. Ya está dentro.
+
+### Verificación en producción (commit `259552a`)
+
+Hecha el 24/11/2026 sobre https://configurador-presupuestos.vercel.app, después
+del `push`. El SHA remoto se consultó al servidor con `git ls-remote`, no al
+caché local de `origin/main`, y coincidía con el local.
+
+| Comprobación                                                                        | Resultado                                                                              |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `index.html`                                                                        | HTTP 200, **638 bytes**, y referencia los mismos nombres de recurso que el build local |
+| JS publicado                                                                        | `index-Du2JEuYb.js`, **232.820 bytes, igual que el build local**                       |
+| CSS publicado                                                                       | `index-CjGqUGDV.css`, **14.311 bytes, igual que el local**                             |
+| Cabeceras de seguridad                                                              | **4 de 4** correctas, más `Strict-Transport-Security`                                  |
+| Sourcemaps (`.js.map`, `.css.map`)                                                  | HTTP 404: el código fuente no queda expuesto                                           |
+| Código fuente, `docs/`, `CLAUDE.md`, `PROGRESO.md`, `package.json`, `.env`, `.git/` | HTTP 404 en las 13 rutas probadas                                                      |
+| Probado en el navegador por el usuario                                              | correcto                                                                               |
+
+**Control positivo del contenido publicado**, con la pareja de marcadores que
+hace válida la comprobación: la misma búsqueda, sobre el mismo archivo,
+encuentra lo que tiene que estar y no encuentra lo que no.
+
+| Marcador                                              | Esperado | Resultado    |
+| ----------------------------------------------------- | -------- | ------------ |
+| `orientativo` y `A pagar el primer día`               | presente | **presente** |
+| `Tu presupuesto`, `Base imponible`, el aviso de vacío | presente | **presente** |
+| `Solo para los tests.` (existe solo en los tests)     | ausente  | ausente      |
+| `Servicios seleccionados` (el contador retirado)      | ausente  | **ausente**  |
+
+El último es el que confirma el pendiente nº 8: el contador provisional de la
+Fase 2 ya no se publica.
+
+**Y queda cerrado el lazo que dejó abierta la Fase 3.** Aquella verificación
+comprobó que el mensaje de error de `calculateSubtotals` **no** estaba en el JS
+publicado —ningún componente importaba el cálculo, así que Vite lo descartaba— y
+anotó que entraría en la Fase 4 «y ahí es donde hay que volver a comprobarlo».
+Comprobado: **ahora está presente**. El cálculo del presupuesto viaja ya en el
+paquete que recibe el navegador, que es exactamente lo que predijo aquella nota.
 
 ---
 
