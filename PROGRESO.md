@@ -1,8 +1,10 @@
 # Estado del desarrollo
 
 **Última actualización:** 24/11/2026
-**Fase actual:** Fase 1 completada. A la espera de autorización para el
-despliegue en Vercel y para la Fase 2.
+**Fase actual:** Fase 1 completada y publicada en GitHub. A la espera de
+autorización para el despliegue en Vercel y para la Fase 2.
+**Repositorio:** https://github.com/Owencl9/configurador-presupuestos
+(**privado** hasta la Fase 10)
 **Entrega:** 30/11/2026 — días 29 y 30 reservados para slides y vídeo.
 
 ---
@@ -90,6 +92,19 @@ completo: test primero, verificación de que falla (`Failed to resolve import
 
 Los tests cubren el contenido mostrado, el nombre accesible del botón, la
 llamada a `onToggle` y el estado `aria-pressed` en ambos sentidos.
+
+### Git y GitHub
+
+- `git init` en la rama `main`, con `.gitignore` y `.gitattributes` ya en su
+  sitio **antes** del primer `git add`.
+- Primer commit: `d4a12de`, 34 archivos, firmado como
+  `Owen Carballo Lopez <360282380+Owencl9@users.noreply.github.com>`.
+- Publicado en `https://github.com/Owencl9/configurador-presupuestos`,
+  **repositorio privado**. Verificado que el commit remoto coincide con el local
+  y que no se ha subido `node_modules`, `dist`, `coverage`, ningún `.env` ni el
+  PDF interno del máster.
+- Autenticación resuelta por Git Credential Manager, que ya está configurado en
+  el ámbito de máquina. No fue necesario crear ningún token a mano.
 
 ### Documentación
 

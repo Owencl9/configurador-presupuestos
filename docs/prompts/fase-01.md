@@ -64,6 +64,14 @@ Rechazo de un comando ya propuesto. Ver la corrección **C1-4**.
 
 Ver las correcciones **C1-6** y **C1-7**.
 
+### Prompt 6 — Aprobación del commit y publicación
+
+> Apruebo la lista y el mensaje. Haz el commit. De acuerdo con dejar las rutas `C:\Users\Owen`.
+>
+> Ya he creado el repositorio privado en GitHub (sin README, sin `.gitignore` y sin licencia). Conéctalo y sube el código. Antes del push, enséñame el comando que vas a ejecutar.
+
+El usuario creó el repositorio él mismo desde el navegador, de modo que marcó «Private» viéndolo en pantalla, sin intermediarios. Y mantuvo el mismo criterio que en todo el proyecto: ver el comando antes de que se ejecute, también cuando la acción ya estaba autorizada. El `push` es la primera operación de la fase que sale del equipo y no se puede deshacer del todo, así que es justo donde ese criterio vale más.
+
 ---
 
 ## 2. Resumen de lo generado
@@ -133,6 +141,19 @@ Los tests cubren el contenido mostrado, el nombre accesible del botón, la llama
 ### Documentación
 
 `CLAUDE.md`, `PROGRESO.md`, `README.md` (sustituyendo el de la plantilla), `docs/decisiones-previas.md`, este registro y cinco ADR: stack, sin backend, dinero en céntimos, Strategy para descuentos y ESLint en lugar de Oxlint.
+
+### Git y publicación
+
+| Paso | Resultado |
+|---|---|
+| `git init` | rama `main`, con `.gitignore` y `.gitattributes` ya presentes antes del primer `git add` |
+| Normalización de finales de línea | al preparar el índice, Git avisó: `in the working copy of 'docs/prompt-maestro.md', CRLF will be replaced by LF`. Es el `.gitattributes` funcionando: el archivo tenía CRLF en disco y entró al repositorio en LF |
+| Primer commit | `d4a12de`, 34 archivos, 2.586 líneas |
+| Autoría | `Owen Carballo Lopez <360282380+Owencl9@users.noreply.github.com>` |
+| `git push -u origin main` | correcto. Git Credential Manager autenticó sin abrir el navegador, porque ya tenía credenciales válidas |
+| Verificación posterior | el commit de `origin/main` coincide con el local, con los mismos 34 archivos y sin ninguno de los excluidos |
+
+El repositorio queda **privado**. Se hará público en la Fase 10, tras la revisión de secretos.
 
 ### Verificaciones de cierre
 
