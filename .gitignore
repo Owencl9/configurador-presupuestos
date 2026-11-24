@@ -36,6 +36,15 @@ blob-report
 # Despliegue
 .vercel
 
+# Permisos locales de Claude Code. Son los permisos concedidos en esta máquina,
+# no configuración del proyecto. El ignore global de Git ya los excluye en este
+# equipo, pero eso no viaja con el repositorio: mismo criterio que el apartado 4
+# de CLAUDE.md con los finales de línea.
+# Se ignora solo el archivo *local*, no toda la carpeta: si algún día hiciera
+# falta un .claude/settings.json con ajustes compartidos del proyecto, ese sí se
+# versionaría.
+.claude/settings.local.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

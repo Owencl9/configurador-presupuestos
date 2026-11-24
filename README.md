@@ -10,10 +10,20 @@ Trabajo Final de Máster — Máster en Desarrollo con Inteligencia Artificial
 
 **🔗 Aplicación en funcionamiento: https://configurador-presupuestos.vercel.app**
 
-> **Estado: en desarrollo (Fase 1 de 11 completada).** La aplicación ya está
-> desplegada y se actualiza automáticamente con cada `push`, pero todavía
-> muestra datos de ejemplo: el catálogo real y el cálculo del presupuesto
-> llegan en las fases 2 y 3.
+> **Estado: en desarrollo (Fase 2 de 11 completada).** La aplicación ya está
+> desplegada y se actualiza automáticamente con cada `push`. El catálogo de
+> servicios ya es el definitivo; el cálculo del presupuesto (subtotales,
+> descuentos, IGIC y total) llega en las fases 3 a 6.
+
+> ### ⚠️ Los precios son ficticios
+>
+> Todos los importes, mínimos de contratación y descripciones de servicios de
+> este repositorio son **inventados**. Están elegidos para que el catálogo
+> resulte verosímil y para poder probar las reglas de negocio, pero **no son las
+> tarifas reales de ninguna agencia** y no sirven como referencia de precios ni
+> como oferta comercial. El repositorio es público y las tarifas reales del autor
+> no se publican. El aviso está también en la cabecera de
+> [`src/shared/data/services.ts`](src/shared/data/services.ts).
 
 ## Stack tecnológico
 
@@ -72,18 +82,43 @@ específico de cada funcionalidad en su propia carpeta.
 │   └── prompts/            Registro de prompts por fase (evidencia de desarrollo con IA)
 ├── public/                 Archivos servidos tal cual
 └── src/
+    ├── features/           Código propio de cada funcionalidad
+    │   └── service-catalog/  Catálogo: agrupación por categorías y formato del precio
     ├── shared/             Código usado por varias funcionalidades
-    │   └── components/     Componentes reutilizables (ServiceCard)
+    │   ├── components/     Componentes reutilizables (ServiceCard)
+    │   ├── data/           Catálogo de servicios (archivo de datos editable)
+    │   └── types/          Tipos de TypeScript del dominio
     └── test/               Configuración común de los tests
 ```
 
-A medida que avancen las fases se añadirán `src/features/` (catálogo,
-presupuesto, formulario de cliente, documento final), `src/context/` (estado
+A medida que avancen las fases se añadirán más carpetas en `src/features/`
+(presupuesto, formulario de cliente, documento final), `src/context/` (estado
 global) y `e2e/` (tests de Playwright).
 
-## Funcionalidades previstas
+Los tests viven junto al código que prueban: `ServiceCard.tsx` y
+`ServiceCard.test.tsx` están en la misma carpeta.
 
-- Catálogo de servicios agrupados por categoría, con pago único, mensual o anual
+### El catálogo de servicios
+
+Los doce servicios están en
+[`src/shared/data/services.ts`](src/shared/data/services.ts), agrupados en cuatro
+categorías: Diseño web, Marketing, Mantenimiento e Infraestructura. **Para
+añadir, quitar o editar un servicio basta con tocar ese archivo**: la lógica no
+conoce ningún servicio concreto, los precios se declaran en céntimos y once
+tests de integridad avisan si la edición deja el catálogo incoherente
+(identificadores repetidos, precios con decimales, categorías vacías…).
+
+Los niveles de un mismo servicio —SEO Básico y Profesional, Mantenimiento Básico
+y Premium— son servicios independientes del catálogo, sin reglas de precio
+propias. Ver
+[ADR 0006](docs/adr/0006-niveles-como-servicios-independientes.md).
+
+## Funcionalidades
+
+- ✅ Catálogo de servicios agrupados por categoría, con pago único, mensual o anual
+
+### Previstas
+
 - Construcción del presupuesto con cantidades y permanencias mínimas
 - Descuentos por pack, permanencia e importe, con tope máximo del 20 %
 - Cálculo del IGIC y desglose de pago inicial, cuota mensual y pagos anuales

@@ -1,8 +1,8 @@
 # Estado del desarrollo
 
 **Última actualización:** 24/11/2026
-**Fase actual:** Fase 1 completada y publicada en GitHub. A la espera de
-autorización para el despliegue en Vercel y para la Fase 2.
+**Fase actual:** Fase 2 completada. A la espera de autorización para la Fase 3,
+que empieza confirmando las reglas de negocio, los precios y el tipo de IGIC.
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**privado** hasta la Fase 10)
 **Aplicación desplegada:** https://configurador-presupuestos.vercel.app
@@ -18,7 +18,7 @@ autorización para el despliegue en Vercel y para la Fase 2.
 | 0    | Preparación del entorno                                                      | ✅ cerrada 23/11/2026 |
 | 1    | Proyecto inicial, Tailwind, Vitest, Git y `ServiceCard` con TDD              | ✅ cerrada 24/11/2026 |
 | —    | **Despliegue adelantado en Vercel** (decisión del apartado 9.2 de la Fase 0) | ✅ hecho 24/11/2026   |
-| 2    | Tipos de TypeScript y catálogo de servicios                                  | pendiente             |
+| 2    | Tipos de TypeScript y catálogo de servicios                                  | ✅ cerrada 24/11/2026 |
 | 3    | Lógica de negocio con TDD: formato de euros, subtotales, IGIC                | pendiente             |
 | 4    | Componentes del presupuesto con TDD                                          | pendiente             |
 | 5    | Estado con Context + useReducer y borradores en localStorage                 | pendiente             |
@@ -143,6 +143,19 @@ compilado tres utilidades que la aplicación no usa (`.grid-cols-3`, `.filter` y
 11.936 a 10.189 bytes (−14,6 %) sin perder ninguna clase en uso. Ver el problema
 **P6** del registro de la Fase 1.
 
+**Verificado en producción** al final de la sesión del 24/11/2026, después del
+`push` del arreglo:
+
+| Comprobación                            | Resultado                                                                                                  |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| CSS publicado                           | `index-HOzYXBrc.css`, **10.189 bytes**, idéntico en tamaño al build local: Vercel compiló los mismos bytes |
+| Las tres utilidades sobrantes           | **desaparecidas** — la de columnas de rejilla sin variante, la de filtros y la de transformaciones         |
+| Clases que la aplicación sí usa         | conservadas, comprobadas una por una, incluidas las variantes `sm:`, `lg:`, `hover:` y `focus-visible:`    |
+| Cabeceras de seguridad de `vercel.json` | **4 de 4** correctas, más `Strict-Transport-Security` que añade Vercel                                     |
+
+Queda cerrada esta comprobación: el arreglo está en producción y confirmado, no
+solo subido al repositorio.
+
 **Anotado para la Fase 10:** Vercel envía `Access-Control-Allow-Origin: *` en
 todas las respuestas. No supone un problema aquí —el contenido es público, no
 hay sesión ni datos privados que otro sitio pueda leer— pero conviene revisarlo
@@ -175,16 +188,134 @@ al escribir la CSP.
 
 ---
 
+## Completado en la Fase 2
+
+### Tipos del catálogo
+
+`src/shared/types/service.ts`. `Service` es una **unión discriminada** de
+`OneTimeService`, `MonthlyService` y `YearlyService`, con `payment` como
+discriminante. `minMonths` existe solo en el tipo mensual, y ahí es obligatorio:
+un servicio anual con meses mínimos **no compila**. Ver
+[ADR 0006](docs/adr/0006-niveles-como-servicios-independientes.md).
+
+### Catálogo de servicios
+
+`src/shared/data/services.ts`: **12 servicios en 4 categorías**, con los precios
+en céntimos y el orden de presentación declarado como dato.
+
+| Categoría       | Servicios                                                                | Pago                    |
+| --------------- | ------------------------------------------------------------------------ | ----------------------- |
+| Diseño web      | Landing page de campaña, Web corporativa, Tienda online                  | único                   |
+| Marketing       | SEO Básico, SEO Profesional, Gestión de redes sociales                   | mensual (mín. 6, 6 y 3) |
+| Mantenimiento   | Mantenimiento Básico, Mantenimiento Premium, Actualización de contenidos | mensual (mín. 3)        |
+| Infraestructura | Hosting y dominio, Correo corporativo, Migración a servidor              | anual, anual y único    |
+
+- **Todos los precios son ficticios**, por decisión del usuario: el repositorio
+  es público y las tarifas reales de su agencia no se publican. Advertido en la
+  cabecera del archivo de datos y en el README.
+- **Los niveles son solo datos.** SEO Básico/Profesional y Mantenimiento
+  Básico/Premium son servicios independientes, sin campo «nivel» ni relación
+  entre ellos. No se ha añadido ninguna regla de precio: el cálculo sigue siendo
+  el del apartado 4.3.
+- El catálogo permite provocar las **cuatro reglas de descuento**: 12 servicios
+  (pack), 6 mensuales (permanencia) y más de 3.000 € en pago único (importe), y
+  por tanto el tope del 20 %.
+
+### Lógica y componente, con TDD
+
+| Archivo                                               | Qué hace                                                                                                                                                            | Tests |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `shared/data/services.test.ts`                        | integridad del catálogo (ids y nombres únicos, céntimos enteros, categorías declaradas y no vacías, mínimos válidos, las tres formas de pago, el umbral de 3.000 €) | 11    |
+| `features/service-catalog/buildPriceLabel.ts`         | texto del precio: `1.200,00 €`, `250,00 €/mes`, `120,00 €/año`                                                                                                      | 8     |
+| `features/service-catalog/groupServicesByCategory.ts` | agrupa por categoría respetando el orden declarado                                                                                                                  | 7     |
+| `features/service-catalog/ServiceCatalog.tsx`         | el catálogo en pantalla, agrupado                                                                                                                                   | 6     |
+
+**Tres ciclos rojo-verde completos**, cada uno con su fallo comprobado antes de
+implementar (`Failed to resolve import …`).
+
+La conversión de céntimos a euros es **provisional y está en un único sitio**,
+dentro de `buildPriceLabel`, marcada con un comentario. En la Fase 3 se
+sustituye por el `formatEuros` probado y se borra. Nota para esa fase:
+`Intl.NumberFormat` con `style: 'currency'` separa el importe del símbolo € con
+un espacio irrompible (U+00A0), no con un espacio normal.
+
+### Accesibilidad
+
+- Jerarquía de encabezados sin saltos: **h1** (título) → **h2** (categoría) →
+  **h3** (servicio). Desaparece el encabezado genérico «Servicios», porque ahora
+  las secciones son las categorías.
+- Cada categoría es una **región con nombre accesible** (`<section>` +
+  `aria-labelledby`), de modo que un lector de pantalla pueda saltar a
+  «Marketing» sin recorrer las tarjetas anteriores.
+- El contador de servicios seleccionados es `aria-live="polite"`, para que el
+  cambio se anuncie al marcar un servicio.
+- Los tests comprueban niveles de encabezado, regiones y nombres accesibles, no
+  clases de CSS.
+
+### Seguridad
+
+- **`.claude/settings.local.json` añadido al `.gitignore`** (petición del
+  usuario). Hallazgo al comprobarlo: el archivo ya estaba ignorado, pero por el
+  ignore **global** de Git de la máquina, que no viaja con el repositorio. Es el
+  mismo criterio del apartado 4 de `CLAUDE.md` con los finales de línea: la
+  protección tiene que estar en el repositorio. Se ignora solo el archivo local,
+  no toda la carpeta, por si algún día hiciera falta un `settings.json`
+  compartido del proyecto.
+- El archivo contenía únicamente dos permisos de PowerShell: ni secretos ni
+  datos personales. No hubo fuga.
+- **Revisión de secretos sobre los 15 archivos del commit**, por categorías de
+  datos: una sola coincidencia, la dirección `@users.noreply.github.com` que ya
+  estaba en este archivo desde la Fase 1. Ni claves, ni tokens, ni rutas con el
+  nombre de usuario, ni datos de terceros.
+- **El primer barrido de esa revisión fue inválido** y dio «sin coincidencias»
+  en las diez categorías: `Select-String` estaba buscando dentro de los nombres
+  de archivo, no dentro de los archivos. Lo detectó el **control positivo**
+  —buscar algo que se sabe que existe— y se repitió con dos herramientas
+  distintas. Ver el problema **P9** del registro de la Fase 2.
+- **Norma nueva en el apartado 5 de `CLAUDE.md`:** toda revisión de secretos
+  incluye un control positivo, y si el control falla se repite con otra
+  herramienta, no con otro intento.
+- **Y la revisión se repitió una tercera vez**, porque después de la segunda se
+  editaron tres archivos para documentar el problema P9. Una revisión describe
+  un contenido concreto: editar algo después la invalida. Ver la corrección
+  **C2-5**.
+
+### Documentación
+
+- [ADR 0006](docs/adr/0006-niveles-como-servicios-independientes.md): modelo de
+  datos del catálogo (niveles independientes y unión discriminada).
+- `docs/prompts/fase-02.md` con el registro de la fase.
+- `README.md`: estructura actualizada, aviso de precios ficticios y estado.
+
+---
+
+## Verificaciones de la Fase 2
+
+| Comprobación           | Resultado                                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------------------------- |
+| `npm run format:check` | sin cambios pendientes                                                                              |
+| `npm run lint`         | 0 errores, 0 avisos                                                                                 |
+| `npm test`             | **37 de 37 en verde** (5 de la Fase 1 + 32 nuevos)                                                  |
+| `npm run build`        | correcto — 224,73 kB de JS (70,64 kB comprimido) y 11,39 kB de CSS                                  |
+| `tsc -b`               | sin errores, y con la garantía de tipos del catálogo comprobada en positivo con un archivo temporal |
+
+No se ha instalado ninguna dependencia nueva, así que `npm audit` no cambia
+respecto a la Fase 1.
+
+---
+
 ## Pendiente y vigilado
 
-| #   | Asunto                                                                                | Cuándo  |
-| --- | ------------------------------------------------------------------------------------- | ------- |
-| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos                 | Fase 10 |
-| 2   | El favicon sigue siendo el de Vite                                                    | Fase 11 |
-| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                    | Fase 9  |
-| 4   | Confirmar con el usuario los precios, el IGIC y las reglas de descuento               | Fase 3  |
-| 5   | El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx` | Fase 2  |
-| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto  | —       |
+| #   | Asunto                                                                                                              | Cuándo  |
+| --- | ------------------------------------------------------------------------------------------------------------------- | ------- |
+| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos                                               | Fase 10 |
+| 2   | El favicon sigue siendo el de Vite                                                                                  | Fase 11 |
+| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                                                  | Fase 9  |
+| 4   | Confirmar con el usuario los precios, el IGIC y las reglas de descuento                                             | Fase 3  |
+| 5   | ~~El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx`~~ **resuelto en la Fase 2** | —       |
+| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto                                | —       |
+| 7   | Sustituir la conversión provisional de céntimos a euros de `buildPriceLabel` por el `formatEuros` probado           | Fase 3  |
+| 8   | El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto                       | Fase 4  |
 
 ### Riesgos abiertos (del inventario de la Fase 0)
 
@@ -200,7 +331,24 @@ al escribir la CSP.
 
 ## Siguiente paso
 
-**Fase 2:** tipos de TypeScript, archivo de datos de servicios y catálogo
-agrupado por categorías. Sustituirá los datos provisionales de `App.tsx`.
+**Fase 3 — Lógica de negocio con TDD.** Empieza **confirmando con el usuario**
+las reglas de negocio del apartado 4.3: los precios (hoy ficticios), los
+porcentajes de descuento, el tope del 20 % y el tipo de IGIC. Después: formato
+de euros (`formatEuros`, que sustituye la conversión provisional de la Fase 2),
+subtotales, separación entre pago único, mensual y anual, y cálculo del IGIC.
+Todo con TDD y con las constantes centralizadas en un único archivo.
 
 No se inicia sin autorización expresa del usuario.
+
+### Aviso de plazo (apartado 9 de CLAUDE.md)
+
+A 24/11/2026, con las fases 0, 1 y 2 cerradas, quedan **4 días de desarrollo**
+(25, 26, 27 y 28) para las fases 3 a 11, porque el 29 y el 30 están reservados
+para las slides y el vídeo. Hacen falta unas **2 fases al día**.
+
+El riesgo **R8** sigue abierto y es el más serio del proyecto. Si al cerrar la
+Fase 4 no se ha recuperado margen, se **propondrán** recortes en el orden
+preacordado: 1) Husky, 2) tests E2E extra, 3) GitHub Actions avanzado, 4)
+borradores en localStorage. Nunca se recortan el cálculo del presupuesto, los
+tests de la lógica de negocio, el despliegue, el README, las slides ni el vídeo.
+Los recortes se proponen; no se aplican por iniciativa propia.

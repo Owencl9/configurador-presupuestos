@@ -74,6 +74,12 @@ No revertir ninguno de los tres ni confiar en `core.autocrlf`.
   buscar, sobre lo que va a entrar en el commit: direcciones de correo
   (cualquiera, con una expresión genérica, no solo las que se esperan), claves y
   tokens, rutas con el nombre de usuario y datos de terceros.
+- **Toda revisión de secretos incluye un control positivo:** buscar algo que se
+  sabe que existe, con la misma herramienta y la misma expresión. Un «sin
+  coincidencias» no distingue entre «no hay nada» y «esto no está buscando». Si
+  el control falla, se repite la revisión con **otra herramienta**, no con otro
+  intento. Ocurrió en la Fase 2 (problema P9): diez categorías en verde porque
+  la búsqueda recorría los nombres de archivo y no su contenido.
 - **Los datos de terceros son tan sensibles como los propios**, y además no se
   pueden rotar. No se versionan documentos ajenos —material docente del máster,
   por ejemplo— ni nombres, correos o datos de contacto de otras personas.
