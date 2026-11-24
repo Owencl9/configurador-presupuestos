@@ -234,6 +234,28 @@ La primera versión de esta tabla afirmaba que el correo personal no aparecía e
 
 **Ventaja añadida:** la CLI resultó tener preguntas nuevas (instalar dependencias, modo interactivo). Al ejecutarse en la carpeta temporal, cualquier pregunta inesperada era inocua. Después se descubrió `--no-interactive`, que las elimina todas.
 
+### P6 — La documentación se compilaba dentro del CSS de producción
+
+**Síntoma:** tras el commit que solo tocaba `vercel.json`, `README.md` y `PROGRESO.md`, el CSS de producción cambió de nombre y creció 59 bytes. El código no se había modificado.
+
+**Causa:** Tailwind 4 detecta las clases que hay que generar **rastreando todos los archivos del proyecto**, incluidos los `.md`. En la tabla de verificación de `PROGRESO.md` se había escrito `grid-cols-3` como texto, y Tailwind lo compiló como utilidad. La aplicación usa `lg:grid-cols-3`, que es un selector distinto: la versión suelta no se usaba en ninguna parte.
+
+Comparando los selectores del CSS publicado con los del build corregido aparecieron **tres utilidades inservibles**: `.grid-cols-3`, `.filter` y `.transform`.
+
+**Resolución:** desactivar la detección automática y declarar las fuentes reales, en `src/index.css`:
+
+```css
+@import 'tailwindcss' source(none);
+@source '../index.html';
+@source './**/*.{ts,tsx}';
+```
+
+**Resultado verificado antes de publicar:** el CSS baja de 11.936 a 10.189 bytes (**−14,6 %**), desaparecen las tres utilidades sobrantes, se conservan todas las que la aplicación sí usa (comprobadas una por una, incluidas las variantes `sm:`, `lg:`, `hover:` y `focus-visible:`) y los 5 tests y el lint siguen en verde.
+
+**Cómo se detectó:** porque se comprobó que las cabeceras llegaban a producción en lugar de darlo por hecho. El cambio de nombre del recurso no era el objeto de la comprobación; apareció de paso.
+
+**Lo que enseña:** un cambio «solo de documentación» puede alterar el artefacto que se publica. En este proyecto es un detalle de 1,7 kB, pero el mecanismo es el que importa: la configuración por defecto de una herramienta no siempre coincide con lo que uno asume que hace.
+
 ---
 
 ## 4. Decisiones tomadas en esta fase
@@ -355,6 +377,8 @@ De paso se corrigió en esa misma línea una afirmación que la decisión de la 
 8. **Una revisión de secretos se plantea por categorías de datos, no por archivos.** Buscar «¿está el archivo X?» falla en cuanto el dato se ha copiado a mano a otro sitio, que es lo que había ocurrido con el correo del profesor. Buscar «¿hay alguna dirección de correo aquí dentro?» no depende de acertar de antemano qué hay que encontrar. La segunda forma encontró lo que la primera no podía ver.
 
 9. **Los datos de terceros son tan sensibles como los propios.** La revisión del apartado 5 del prompt maestro está redactada pensando en claves y contraseñas, pero en un repositorio público el correo de otra persona, un nombre o un documento ajeno son igual de irreversibles. Y a diferencia de una clave, no se pueden rotar.
+
+10. **Un cambio «solo de documentación» puede cambiar lo que se publica.** Tailwind 4 rastrea los `.md` del proyecto en busca de clases, así que citar una clase en la documentación la compila en el CSS de producción. Lo que parecía imposible de romper —escribir una tabla en un archivo Markdown— modificó el artefacto desplegado. Ver el problema **P6**.
 
 ---
 

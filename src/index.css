@@ -1,6 +1,14 @@
 /* Tailwind CSS v4 se configura desde el propio CSS, no con tailwind.config.js.
-   Esta línea importa el reset, las utilidades y las variables de tema. */
-@import 'tailwindcss';
+   Esta línea importa el reset, las utilidades y las variables de tema.
+
+   `source(none)` desactiva la detección automática de clases. Por defecto,
+   Tailwind 4 rastrea todos los archivos del proyecto, incluidos los .md: una
+   clase citada en la documentación acaba compilada en el CSS de producción
+   aunque la aplicación no la use. Con los `@source` de abajo, solo se escanea
+   el código real. Las rutas son relativas a este archivo. */
+@import 'tailwindcss' source(none);
+@source '../index.html';
+@source './**/*.{ts,tsx}';
 
 /* Tipografía base del proyecto. Se declara aquí, en la capa `base`, para que
    cualquier utilidad de Tailwind pueda sobreescribirla sin usar !important. */

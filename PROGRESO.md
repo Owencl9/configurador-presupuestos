@@ -123,16 +123,25 @@ llamada a `onToggle` y el estado `aria-pressed` en ambos sentidos.
 
 **Verificaciones sobre la URL de producción:**
 
-| Comprobación                                                                             | Resultado                                                                                                            |
-| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Acceso sin iniciar sesión (ventana de incógnito)                                         | correcto, HTTP 200                                                                                                   |
-| Recursos `.js`, `.css` y `favicon.svg`                                                   | HTTP 200, y **del mismo tamaño exacto que el build local** (221.829 y 11.877 bytes): Vercel compiló los mismos bytes |
-| Tailwind compilado en el servidor                                                        | `sr-only`, `bg-slate-900`, `grid-cols-3` y `focus-visible:outline-2` presentes en el CSS publicado                   |
-| Accesibilidad en el JS publicado                                                         | `aria-pressed` y `aria-hidden` presentes                                                                             |
-| _Sourcemaps_ (`.js.map`, `.css.map`)                                                     | HTTP 404: el código fuente no queda expuesto                                                                         |
-| Documentación y configuración (`CLAUDE.md`, `docs/`, `package.json`, `src/`, `.vscode/`) | HTTP 404: no se publica nada del repositorio                                                                         |
-| Rutas sensibles (`/.git/config`, `/.git/HEAD`, `/.env`)                                  | HTTP 404                                                                                                             |
-| HTTPS y `Strict-Transport-Security`                                                      | lo sirve Vercel por defecto: `max-age=63072000; includeSubDomains; preload`                                          |
+| Comprobación                                                                             | Resultado                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Acceso sin iniciar sesión (ventana de incógnito)                                         | correcto, HTTP 200                                                                                                                                                                               |
+| Recursos `.js`, `.css` y `favicon.svg`                                                   | HTTP 200, y **del mismo tamaño exacto que el build local**: Vercel compiló los mismos bytes, lo que descarta de golpe los problemas de versión de Node o de dependencias resueltas de otra forma |
+| Tailwind compilado en el servidor                                                        | `sr-only`, `bg-slate-900`, `grid-cols-3` y `focus-visible:outline-2` presentes en el CSS publicado                                                                                               |
+| Accesibilidad en el JS publicado                                                         | `aria-pressed` y `aria-hidden` presentes                                                                                                                                                         |
+| _Sourcemaps_ (`.js.map`, `.css.map`)                                                     | HTTP 404: el código fuente no queda expuesto                                                                                                                                                     |
+| Documentación y configuración (`CLAUDE.md`, `docs/`, `package.json`, `src/`, `.vscode/`) | HTTP 404: no se publica nada del repositorio                                                                                                                                                     |
+| Rutas sensibles (`/.git/config`, `/.git/HEAD`, `/.env`)                                  | HTTP 404                                                                                                                                                                                         |
+| HTTPS y `Strict-Transport-Security`                                                      | lo sirve Vercel por defecto: `max-age=63072000; includeSubDomains; preload`                                                                                                                      |
+
+**Hallazgo al verificar las cabeceras:** el redespliegue cambió el nombre del
+CSS aunque el commit solo tocaba documentación. Tailwind 4 rastrea todos los
+archivos del proyecto —incluidos los `.md`— en busca de clases, y había
+compilado tres utilidades que la aplicación no usa (`.grid-cols-3`, `.filter` y
+`.transform`) a partir del texto de la documentación. Corregido en
+`src/index.css` con `source(none)` y dos `@source` explícitos: el CSS pasa de
+11.936 a 10.189 bytes (−14,6 %) sin perder ninguna clase en uso. Ver el problema
+**P6** del registro de la Fase 1.
 
 **Anotado para la Fase 10:** Vercel envía `Access-Control-Allow-Origin: *` en
 todas las respuestas. No supone un problema aquí —el contenido es público, no
