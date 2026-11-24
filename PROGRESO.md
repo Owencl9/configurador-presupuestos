@@ -5,8 +5,8 @@
 Context con `useReducer`, y el presupuesto en curso se guarda como borrador en
 `localStorage`: sobrevive a recargar la página, no guarda ni precios ni nombres
 ni datos personales, y valida todo lo que lee. 300 tests en verde. Probado en el
-navegador por el usuario, en pantalla ancha y en móvil. **Pendiente de verificar
-en producción** tras el `push`.
+navegador por el usuario, en pantalla ancha y en móvil, y **verificado en
+producción** (commit `fd89b2d`).
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**privado** hasta la Fase 10)
 **Aplicación desplegada:** https://configurador-presupuestos.vercel.app
@@ -898,6 +898,48 @@ el patrón que documenta React —ajustar el estado durante el render comparando
 con el valor anterior—, y **los 31 tests del botón y de `App` siguieron en verde
 sin tocar ninguno**.
 
+### Verificación en producción (commit `fd89b2d`)
+
+Hecha el 24/11/2026 sobre https://configurador-presupuestos.vercel.app, después
+del `push`. El SHA remoto se consultó al servidor con `git ls-remote`, no al
+caché local de `origin/main`, y coincidía con el local.
+
+| Comprobación                                                                        | Resultado                                                                              |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `index.html`                                                                        | HTTP 200, **638 bytes**, y referencia los mismos nombres de recurso que el build local |
+| JS publicado                                                                        | `index-CzsjOxrs.js`, **237.293 bytes, igual que el build local**                       |
+| CSS publicado                                                                       | `index-BWK1CCBz.css`, **14.494 bytes, igual que el local**                             |
+| Cabeceras de seguridad                                                              | **4 de 4** correctas, más `Strict-Transport-Security`                                  |
+| Sourcemaps (`.js.map`, `.css.map`)                                                  | HTTP 404: el código fuente no queda expuesto                                           |
+| Código fuente, `docs/`, `CLAUDE.md`, `PROGRESO.md`, `package.json`, `.env`, `.git/` | HTTP 404 en las 20 rutas probadas                                                      |
+| **`docs/privado/` y el documento que contiene**                                     | **HTTP 404**, en la ruta nueva y en la antigua                                         |
+
+**Control positivo y negativo del contenido publicado.** La misma búsqueda,
+sobre el mismo archivo, encuentra lo que tiene que estar y no encuentra lo que
+no:
+
+| Marcador                                                 | Esperado | Resultado    |
+| -------------------------------------------------------- | -------- | ------------ |
+| `Empezar de nuevo`                                       | presente | **presente** |
+| `configurador-presupuestos:budget-draft:v1`              | presente | **presente** |
+| `Sí, borrar el presupuesto`                              | presente | **presente** |
+| `Se ha borrado el presupuesto`                           | presente | **presente** |
+| `Seguro que quieres borrar el presupuesto`               | presente | **presente** |
+| `useBudget solo funciona dentro de`                      | presente | **presente** |
+| `Acción del presupuesto no contemplada`                  | presente | **presente** |
+| `Solo para los tests.` (existe solo en los tests)        | ausente  | ausente      |
+| `Web de ejemplo` y `SEO de ejemplo` (datos de los tests) | ausente  | ausente      |
+| `Servicios seleccionados` (el contador retirado)         | ausente  | ausente      |
+| `budget-draft:v2` (versión que no existe)                | ausente  | ausente      |
+
+Los cuatro últimos son lo que hace válidos a los siete primeros: sin ellos, un
+«presente» no distingue entre «el código está publicado» y «la búsqueda
+encuentra cualquier cosa».
+
+**La clave del borrador viaja en el JS publicado**, y es la comprobación que
+cierra la fase: el borrador no es una funcionalidad que solo exista en los
+tests, está en el paquete que recibe el navegador.
+
 ---
 
 ## Revisión del historial para la Fase 10 (hecha en la Fase 5)
@@ -968,25 +1010,27 @@ problema **P9** de la Fase 2 con otra forma.
 
 ## Pendiente y vigilado
 
-| #   | Asunto                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Cuándo                 |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos. **El historial ya está revisado** (ver el apartado anterior): no hay que reescribirlo                                                                                                                                                                                                                                                                                               | Fase 10                |
-| 2   | El favicon sigue siendo el de Vite                                                                                                                                                                                                                                                                                                                                                                                                                         | Fase 11                |
-| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                                                                                                                                                                                                                                                                                                                                                                                         | Fase 9                 |
-| 4   | ~~Confirmar con el usuario los precios, el IGIC y las reglas de descuento~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                                                                                                                      | —                      |
-| 5   | ~~El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx`~~ **resuelto en la Fase 2**                                                                                                                                                                                                                                                                                                                                        | —                      |
-| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto                                                                                                                                                                                                                                                                                                                                                                       | —                      |
-| 7   | ~~Sustituir la conversión provisional de céntimos a euros de `buildPriceLabel` por el `formatEuros` probado~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                                                                                    | —                      |
-| 8   | ~~El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto~~ **resuelto en la Fase 4**                                                                                                                                                                                                                                                                                                                                | —                      |
-| 9   | ~~**Los meses de contratación no están en `BudgetLine`.** Entran con su selector~~ **resuelto en la Fase 4**: unión discriminada, meses obligatorios en la línea mensual                                                                                                                                                                                                                                                                                   | —                      |
-| 10  | ~~**Decidir si el resumen muestra «lo que se paga hoy»**~~ **resuelto en la Fase 4**: sí, como línea informativa «A pagar el primer día (orientativo)», fuera del tipo `Budget` ([ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md))                                                                                                                                                                                                              | —                      |
-| 11  | **A qué subtotal se aplica el descuento por pack**: a los tres bloques o solo a alguno. La regla dice «el subtotal» y hay tres                                                                                                                                                                                                                                                                                                                             | Fase 6                 |
-| 12  | ~~`calculateBudget` es el único punto de entrada del cálculo: los componentes no deben hacer cuentas~~ **cumplido en la Fase 4 y en la Fase 5**: ni el reducer, ni el proveedor, ni `Configurator`, ni el botón de reiniciar hacen una sola cuenta. Sigue vigilado en las fases 6 y 7                                                                                                                                                                      | Fases 6-7              |
-| 13  | ~~**Añadir al apartado 1 de `CLAUDE.md` la norma de ritmo de la corrección C3-1**~~ **resuelto al abrir la Fase 4**                                                                                                                                                                                                                                                                                                                                        | —                      |
-| 14  | **Mejora opcional, solo si sobra tiempo:** resumen fijo en un lateral en pantallas anchas, para no tener que bajar hasta el final para ver los totales. Petición del usuario en la Fase 4. Es maquetación, no cálculo: **se recorta antes que cualquier cosa de la lista del apartado 9 de `CLAUDE.md`**                                                                                                                                                   | Fase 11, si hay margen |
-| 15  | **Los términos concretos de la revisión de secretos los aporta el usuario** en el momento de ejecutarla: el nombre de su agencia, su dominio y el identificador de su correo personal. No pueden estar escritos en el repositorio, porque son precisamente los datos que no deben aparecer (corrección C4-11)                                                                                                                                              | Fase 10                |
-| 16  | **Decidir si los datos del cliente se guardan en el borrador.** El formato actual no guarda ningún dato personal. Un nombre y un correo en `localStorage` son datos personales en un ordenador que puede ser compartido, y el presupuesto funciona igual sin ellos ([ADR 0009](docs/adr/0009-borradores-en-localstorage.md))                                                                                                                               | Fase 7                 |
-| 17  | **La ruta absoluta de trabajo, con el nombre de usuario de Windows, sigue en el historial.** Entró en la Fase 1 en `docs/prompts/fase-00.md`; en la Fase 5 se ha sustituido en el archivo actual por `%USERPROFILE%\…`, pero los commits anteriores la conservan. **Decidir en la Fase 10 si se limpia**, sabiendo que limpiarla obliga a reescribir el historial y que el nombre del autor ya es público por la firma de los commits, que es intencionada | Fase 10                |
+| #   | Asunto                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Cuándo                 |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------- |
+| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos. **El historial ya está revisado** (ver el apartado anterior): no hay que reescribirlo                                                                                                                                                                                                                                                                                                                                                                         | Fase 10                |
+| 2   | El favicon sigue siendo el de Vite                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Fase 11                |
+| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Fase 9                 |
+| 4   | ~~Confirmar con el usuario los precios, el IGIC y las reglas de descuento~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                                                                                                                                                                                                | —                      |
+| 5   | ~~El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx`~~ **resuelto en la Fase 2**                                                                                                                                                                                                                                                                                                                                                                                                                  | —                      |
+| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto                                                                                                                                                                                                                                                                                                                                                                                                                                                 | —                      |
+| 7   | ~~Sustituir la conversión provisional de céntimos a euros de `buildPriceLabel` por el `formatEuros` probado~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                                                                                                                                                              | —                      |
+| 8   | ~~El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto~~ **resuelto en la Fase 4**                                                                                                                                                                                                                                                                                                                                                                                                          | —                      |
+| 9   | ~~**Los meses de contratación no están en `BudgetLine`.** Entran con su selector~~ **resuelto en la Fase 4**: unión discriminada, meses obligatorios en la línea mensual                                                                                                                                                                                                                                                                                                                                                             | —                      |
+| 10  | ~~**Decidir si el resumen muestra «lo que se paga hoy»**~~ **resuelto en la Fase 4**: sí, como línea informativa «A pagar el primer día (orientativo)», fuera del tipo `Budget` ([ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md))                                                                                                                                                                                                                                                                                        | —                      |
+| 11  | **A qué subtotal se aplica el descuento por pack**: a los tres bloques o solo a alguno. La regla dice «el subtotal» y hay tres                                                                                                                                                                                                                                                                                                                                                                                                       | Fase 6                 |
+| 12  | ~~`calculateBudget` es el único punto de entrada del cálculo: los componentes no deben hacer cuentas~~ **cumplido en la Fase 4 y en la Fase 5**: ni el reducer, ni el proveedor, ni `Configurator`, ni el botón de reiniciar hacen una sola cuenta. Sigue vigilado en las fases 6 y 7                                                                                                                                                                                                                                                | Fases 6-7              |
+| 13  | ~~**Añadir al apartado 1 de `CLAUDE.md` la norma de ritmo de la corrección C3-1**~~ **resuelto al abrir la Fase 4**                                                                                                                                                                                                                                                                                                                                                                                                                  | —                      |
+| 14  | **Mejora opcional, solo si sobra tiempo:** resumen fijo en un lateral en pantallas anchas, para no tener que bajar hasta el final para ver los totales. Petición del usuario en la Fase 4. Es maquetación, no cálculo: **se recorta antes que cualquier cosa de la lista del apartado 9 de `CLAUDE.md`**                                                                                                                                                                                                                             | Fase 11, si hay margen |
+| 15  | **Los términos concretos de la revisión de secretos los aporta el usuario** en el momento de ejecutarla: el nombre de su agencia, su dominio y el identificador de su correo personal. No pueden estar escritos en el repositorio, porque son precisamente los datos que no deben aparecer (corrección C4-11)                                                                                                                                                                                                                        | Fase 10                |
+| 16  | **Decidir si los datos del cliente se guardan en el borrador.** El formato actual no guarda ningún dato personal. Un nombre y un correo en `localStorage` son datos personales en un ordenador que puede ser compartido, y el presupuesto funciona igual sin ellos ([ADR 0009](docs/adr/0009-borradores-en-localstorage.md))                                                                                                                                                                                                         | Fase 7                 |
+| 17  | **La ruta absoluta de trabajo, con el nombre de usuario de Windows, sigue en el historial.** Entró en la Fase 1 en `docs/prompts/fase-00.md`; en la Fase 5 se ha sustituido en el archivo actual por `%USERPROFILE%\…`, pero los commits anteriores la conservan. **Decidir en la Fase 10 si se limpia**, sabiendo que limpiarla obliga a reescribir el historial y que el nombre del autor ya es público por la firma de los commits, que es intencionada                                                                           | Fase 10                |
+| 18  | **Nada en pantalla explica para qué sirven los meses.** Al probar la Fase 5, cambiar los meses no mueve ningún importe —es correcto, la cuota es la de un mes— y la pantalla no dice por qué importan. En la Fase 6, con el descuento por permanencia ya implementado: **una pista bajo el selector de meses** de los servicios mensuales, del estilo «Desde 12 meses: 10 % de descuento», y **el motivo de cada descuento en el resumen**, como pide el apartado 4.4 del prompt maestro. Petición del usuario tras probar la Fase 5 | Fase 6                 |
+| 19  | **Decidir si se muestra el compromiso total de los servicios mensuales** (meses × cuota). Quedó aparcado en la Fase 4 —«el compromiso total se deja para más adelante»— y la Fase 6 es su momento, porque es cuando los meses empiezan a cambiar un importe                                                                                                                                                                                                                                                                          | Fase 6                 |
 
 ### Riesgos abiertos (del inventario de la Fase 0)
 
@@ -1002,12 +1046,11 @@ problema **P9** de la Fase 2 con otra forma.
 
 ## Siguiente paso
 
-**Pendiente inmediato de la Fase 5:** `push` y **verificación en producción**,
-con el mismo criterio que las fases 2, 3 y 4 —SHA remoto consultado al servidor,
-tamaños de los recursos comparados con el build local, cabeceras, 404 en rutas
-sensibles y marcadores del código nuevo en el JS publicado, con control positivo
-y negativo—. Añade una comprobación nueva: que el borrador funciona en el
-dominio de producción, que es un `localStorage` distinto del de `localhost`.
+**Pendiente inmediato:** que el usuario pruebe el borrador **en el dominio de
+producción**, que tiene un `localStorage` distinto del de `localhost`. Es lo
+único de esta fase que no se puede comprobar desde la terminal: los marcadores
+del código están en el JS publicado, pero que el navegador guarde y recupere en
+ese dominio lo ve quien abre la página.
 
 **Después, Fase 6 — Descuentos con patrón Strategy.** Una estrategia por regla
 —pack, permanencia e importe—, el tope del 20 % y el calculador que las combina,
@@ -1027,8 +1070,13 @@ proyecto:
 - **Los meses ya están en las líneas** desde la Fase 4, que es el dato que
   necesita el descuento por permanencia, y `MAX_MONTHS` (36) está por encima de
   los 12 meses del descuento, con un test que lo vigila.
-- **Queda una decisión por tomar**, la del pendiente nº 11: a qué subtotal se
-  aplica el descuento por pack, porque la regla dice «el subtotal» y hay tres.
+- **Quedan tres decisiones por tomar**: el pendiente nº 11 —a qué subtotal se
+  aplica el descuento por pack, porque la regla dice «el subtotal» y hay tres—,
+  el nº 19 —si se muestra el compromiso total de los servicios mensuales— y el
+  nº 18, que es el único que **sí toca pantalla**: la pista bajo el selector de
+  meses y el motivo de cada descuento en el resumen. Con eso, la afirmación de
+  arriba de que «la Fase 6 es solo lógica» deja de ser cierta, y conviene
+  saberlo al planificarla.
 
 No se inicia sin autorización expresa del usuario.
 
