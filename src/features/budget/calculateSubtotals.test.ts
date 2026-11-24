@@ -42,11 +42,28 @@ const HOSTING: YearlyService = {
   payment: 'yearly',
 }
 
-/** Atajo para escribir una línea de presupuesto en los tests. */
-const linea = (service: BudgetLine['service'], quantity = 1): BudgetLine => ({
-  service,
-  quantity,
-})
+/**
+ * Atajo para escribir una línea de presupuesto en los tests.
+ *
+ * Desde la Fase 4 una línea mensual **tiene que llevar meses**, así que el
+ * atajo los pone: los mínimos del servicio, igual que `createBudgetLine`. No
+ * llama a `createBudgetLine` a propósito, para que estos tests sigan probando
+ * solo `calculateSubtotals` y no dos funciones a la vez.
+ *
+ * Las nueve comprobaciones de abajo no han cambiado ni una línea al crecer el
+ * tipo: describen el reparto por forma de pago, que es lo que esta función
+ * hace, y no la forma exacta de una línea.
+ */
+function linea(service: BudgetLine['service'], quantity = 1): BudgetLine {
+  switch (service.payment) {
+    case 'monthly':
+      return { service, quantity, months: service.minMonths }
+    case 'one-time':
+      return { service, quantity }
+    case 'yearly':
+      return { service, quantity }
+  }
+}
 
 describe('calculateSubtotals', () => {
   it('devuelve tres ceros con un presupuesto vacío', () => {
@@ -116,8 +133,13 @@ describe('calculateSubtotals', () => {
 
   it('devuelve la cuota de un mes, no el total de la permanencia', () => {
     // `monthlyCents` es lo que se paga cada mes. Multiplicarlo por los meses
-    // contratados es otra cosa y no es asunto de esta función: los meses no
-    // están todavía en `BudgetLine` (entran en la Fase 4).
+    // contratados es otra cosa y no es asunto de esta función.
+    //
+    // Desde la Fase 4 este test vale más que cuando se escribió: los meses ya
+    // están en la línea —el atajo de arriba le pone los 6 del servicio— y el
+    // resultado sigue siendo la cuota de **un** mes. Antes comprobaba que no se
+    // multiplicaba por un dato que no existía; ahora comprueba que no se
+    // multiplica por uno que sí está ahí, al alcance de la función.
     expect(calculateSubtotals([linea(SEO)]).monthlyCents).toBe(SEO.priceCents)
   })
 

@@ -1,10 +1,11 @@
 # Estado del desarrollo
 
 **Última actualización:** 24/11/2026
-**Fase actual:** **Fase 3 completada**. Reglas de negocio confirmadas y
-centralizadas, `formatEuros`, subtotales por forma de pago y cálculo del IGIC,
-todo con TDD. 87 tests en verde. Pendiente de commit y de verificación en
-producción.
+**Fase actual:** **Fase 4 completada**. El presupuesto funciona de punta a
+punta en el navegador: añadir servicios, elegir cantidad y meses con sus
+mínimos, y el resumen con los tres bloques de pago, su IGIC y su total. 190
+tests en verde. Probado en local por el usuario. Pendiente de commit y de
+verificación en producción.
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**privado** hasta la Fase 10)
 **Aplicación desplegada:** https://configurador-presupuestos.vercel.app
@@ -22,7 +23,7 @@ producción.
 | —    | **Despliegue adelantado en Vercel** (decisión del apartado 9.2 de la Fase 0) | ✅ hecho 24/11/2026   |
 | 2    | Tipos de TypeScript y catálogo de servicios                                  | ✅ cerrada 24/11/2026 |
 | 3    | Lógica de negocio con TDD: formato de euros, subtotales, IGIC                | ✅ cerrada 24/11/2026 |
-| 4    | Componentes del presupuesto con TDD                                          | pendiente             |
+| 4    | Componentes del presupuesto con TDD                                          | ✅ cerrada 24/11/2026 |
 | 5    | Estado con Context + useReducer y borradores en localStorage                 | pendiente             |
 | 6    | Descuentos con patrón Strategy                                               | pendiente             |
 | 7    | Formulario de cliente y documento imprimible                                 | pendiente             |
@@ -497,23 +498,200 @@ ya no entra en el CSS.
 
 ---
 
+## Completado en la Fase 4
+
+### El presupuesto, funcionando
+
+La aplicación pasa de **enseñar un catálogo** a **construir un presupuesto**.
+Se añaden servicios desde el catálogo, se eligen la cantidad y los meses, y el
+resumen se actualiza al instante con los tres bloques de pago.
+
+**`calculateBudget`, `calculateIgic` y `calculateSubtotals` no han cambiado de
+comportamiento en esta fase**, y es la mejor señal de que la frontera entre
+cálculo y presentación estaba bien puesta en la Fase 3. Lo único que se tocó de
+ellos fue extraer la multiplicación a `calculateLineAmountCents` (ver más
+abajo), con sus tests en verde antes y después.
+
+### Los meses, en `BudgetLine` (pendiente nº 9)
+
+`BudgetLine` pasa de una interfaz a una **unión discriminada** de tres tipos:
+`OneTimeBudgetLine`, `MonthlyBudgetLine` y `YearlyBudgetLine`. Los meses son
+**obligatorios** en la mensual y `number`, no `number | undefined`.
+
+Hubo que elegir entre dos garantías de tipos que resultaron **incompatibles**,
+y se midió antes de decidir:
+
+| Garantía                                                      | Con `months?: never` | Sin él |
+| ------------------------------------------------------------- | -------------------- | ------ |
+| Una línea mensual **sin** meses no compila                    | ✅                   | ✅     |
+| Una línea de pago único **con** meses no compila              | ✅                   | ❌     |
+| Leer `linea.months` sin comprobar la forma de pago no compila | ❌                   | ✅     |
+
+**Se eligió la tercera** (decisión del usuario): las lecturas están repartidas
+por todos los componentes y las escrituras pasan por un solo sitio,
+`createBudgetLine`, que tiene sus tests. Las dos garantías que sí existen están
+probadas con `@ts-expect-error` en `isMonthlyLine.test.ts`, y hay un comentario
+en `shared/types/budget.ts` que explica la que falta y qué la sustituye.
+
+El acceso a los meses pasa por **`isMonthlyLine`**, un predicado de tipo. Hace
+falta porque el discriminante de `BudgetLine` está **anidado** dentro de
+`service`, y TypeScript no estrecha una unión mirando el campo de un campo.
+
+### El resumen (pendientes nº 8 y nº 10)
+
+- Los **tres bloques por separado**, cada uno con base imponible, IGIC y total.
+  Un bloque sin importe no se muestra.
+- **Sin total general**, como fija el [ADR 0007](docs/adr/0007-redondeo-del-igic.md).
+- Una línea informativa: **«A pagar el primer día (orientativo)»**, que es el
+  pago inicial más la primera cuota mensual más el primer pago anual. Es una
+  función con tests y **está fuera del tipo `Budget`** a propósito. Razonado en
+  el [ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md).
+- La fila del descuento y la del subtotal **solo aparecen cuando hay
+  descuento**. En toda la Fase 4 vale 0, pero están escritas y probadas, así
+  que la Fase 6 será solo lógica y no tendrá que tocar pantalla.
+- **El contador provisional «Servicios seleccionados» ha desaparecido**
+  (pendiente nº 8).
+
+### Los componentes no calculan (pendiente nº 12)
+
+Ningún componente de esta fase tiene una suma, una multiplicación ni una
+división entre cien. Todos los importes salen de `calculateBudget`,
+`calculateLineAmountCents` y `calculateFirstPaymentCents`, y se muestran con
+`formatEuros` y `buildAmountLabel`.
+
+### Una sola multiplicación en todo el proyecto
+
+`calculateSubtotals` multiplicaba el precio por la cantidad por su cuenta.
+Desde la Fase 4 la línea del presupuesto necesita ese mismo importe en
+pantalla, así que la multiplicación se extrajo a `calculateLineAmountCents` y
+`calculateSubtotals` pasó a llamarla. **Sus nueve comprobaciones siguieron en
+verde sin tocar ninguna.** Decisión del usuario: una sola fuente del cálculo,
+mejor que dejar el archivo intacto.
+
+Por el mismo motivo, la tabla de sufijos `/mes` y `/año` salió de
+`buildPriceLabel` —que vive en el catálogo— a `shared/utils/buildAmountLabel`,
+que es lo que manda el apartado 6 de `CLAUDE.md` cuando algo lo usan dos
+funcionalidades. `buildPriceLabel` se quedó en dos líneas y **sus ocho tests no
+han cambiado en ninguno de los tres cambios que ha sufrido** (Fase 2, Fase 3 y
+Fase 4).
+
+### Los selectores y la corrección de valores
+
+| Decisión                                                                     | Motivo                                                                                                                                                          |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Un solo `QuantitySelector`** para cantidad y meses                         | Cambian la etiqueta, la unidad y los límites, que llegan por props. Dos componentes tendrían la misma lógica de corrección escrita dos veces                    |
+| **La corrección se aplica al salir del campo o con Enter**, nunca al teclear | Decisión del usuario. Con el mínimo en 6, escribir «12» pasa por un «1»: corrigiendo en cada pulsación sería imposible escribir 12                              |
+| **Un valor por encima del máximo se queda en el máximo**                     | Decisión del usuario. Quien escribe 500 meses quería muchos meses. Devolver el mínimo haría parecer que el campo no funciona                                    |
+| `normalizeNumber` recibe **`unknown`**                                       | Desde la Fase 5 valida también lo que se lea de `localStorage`, donde puede haber cualquier cosa. Si solo aceptara números, alguien tendría que convertir antes |
+| Los decimales se **truncan**, y antes de aplicar límites                     | «6,9 meses» es 6 meses y algo, y ese algo no se contrata. El orden importa: 5,9 trunca a 5 y entonces sube al mínimo                                            |
+| Lo que no es un número va al **mínimo**                                      | Es el único valor siempre válido y, en una línea, el más barato: un dato corrupto nunca infla un importe                                                        |
+
+### Los topes, en el archivo de constantes
+
+| Constante      | Valor | Por qué                                                                       |
+| -------------- | ----- | ----------------------------------------------------------------------------- |
+| `MIN_QUANTITY` | 1     | Una línea con cero unidades es una línea que habría que haber borrado         |
+| `MAX_QUANTITY` | 99    | De sobra para una agencia, y mantiene la aritmética lejos de cualquier límite |
+| `MAX_MONTHS`   | 36    | Tres años. Más que eso debería ser un presupuesto nuevo                       |
+
+Con **dos tests de coherencia** que vigilan que dos valores sigan teniendo
+sentido juntos:
+
+- `MAX_MONTHS` tiene que estar **por encima de los 12 meses del descuento por
+  permanencia**. Un tope por debajo dejaría ese descuento inalcanzable sin que
+  nada avisara.
+- Ningún servicio mensual del catálogo puede tener un `minMonths` por encima
+  del tope, porque su selector nacería con un valor que su propio máximo no
+  admite. **Este test se vio fallar** bajando el tope a 2: avisa nombrando el
+  servicio.
+
+### Accesibilidad
+
+- Jerarquía sin saltos: **h1** título → **h2** categorías y «Tu presupuesto» →
+  **h3** «Resumen» → **h4** cada bloque de pago.
+- El panel del presupuesto es una **región con nombre accesible**, igual que
+  las categorías del catálogo.
+- Los campos y botones de los selectores llevan el **nombre del servicio** en
+  su nombre accesible («Meses de SEO Básico»), porque con cinco líneas en
+  pantalla «Meses» a secas no identifica cuál.
+- El rango permitido va **en texto** y asociado al campo, no solo en el gris de
+  un botón desactivado.
+- **El `aria-live` está en una frase corta de estado** —cuántos servicios hay y
+  cuánto se paga el primer día—, no en todo el resumen. Decisión del usuario:
+  con el resumen entero como región activa, cada pulsación haría que un lector
+  de pantalla recitara las quince cifras del desglose. La frase está en la
+  página también con el presupuesto vacío, porque una región activa que aparece
+  con su contenido no se anuncia de forma fiable.
+- El botón de quitar de la línea y el del catálogo tienen **el mismo nombre
+  accesible** a propósito: es la misma acción vista desde dos sitios, y lo que
+  los distingue es la región en la que están.
+
+### Alineación de las líneas
+
+Las líneas del presupuesto usan una **rejilla de tres columnas de ancho
+declarado** a partir de 1024 px. Con un `flex` y `justify-between`, los
+selectores se desplazaban según el ancho del importe («72,00 €/año» frente a
+«300,00 €») y según si la línea tiene uno o dos selectores. La fila empieza en
+1024 px y no en 640 px porque entre esos dos anchos no caben las tres columnas
+sin estrujar el nombre del servicio: en ese rango se apila, igual que en el
+móvil. Los importes llevan `tabular-nums`, así que quedan alineados por la coma.
+
+Comprobado en el navegador por el usuario, en pantalla ancha y en ancho de
+móvil.
+
+### Documentación
+
+- [ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md): el primer pago
+  es presentación, no un total del presupuesto.
+- `docs/prompts/fase-04.md` con el registro de la fase.
+- **Dos normas nuevas en `CLAUDE.md`**: la de ritmo en el apartado 1 (pendiente
+  nº 13) y, en el apartado 5, que ningún mensaje de comprobación puede afirmar
+  que algo ha ido bien sin depender del resultado real del comando.
+
+---
+
+## Verificaciones de la Fase 4
+
+| Comprobación           | Resultado                                                         |
+| ---------------------- | ----------------------------------------------------------------- |
+| `npm run format:check` | en verde (tras reformatear 7 archivos nuevos)                     |
+| `npm run lint`         | 0 errores, 0 avisos                                               |
+| `npm test`             | **190 de 190 en verde** (87 anteriores + 103 nuevos)              |
+| `tsc -b`               | sin errores                                                       |
+| `npm run build`        | correcto — 232,82 kB de JS (72,80 kB comprimido), 14,31 kB de CSS |
+
+**Diez ciclos rojo-verde completos.** Ocho con el fallo de importe sin resolver
+(`Failed to resolve import …`, 0 tests ejecutados) y dos con fallos de
+aserción: los topes del archivo de constantes y los ocho tests de integración
+de `App`.
+
+No se ha instalado ninguna dependencia nueva, así que `npm audit` no cambia
+respecto a la Fase 1.
+
+**El JS ha crecido 8 kB, y era lo previsto.** La Fase 3 dejó anotado que el
+cálculo no estaba en el paquete publicado porque ningún componente lo
+importaba, y que entraría en la Fase 4. Ya está dentro.
+
+---
+
 ## Pendiente y vigilado
 
-| #   | Asunto                                                                                                                                                                                                                                                                                                                                                       | Cuándo                 |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------- |
-| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos                                                                                                                                                                                                                                                                                        | Fase 10                |
-| 2   | El favicon sigue siendo el de Vite                                                                                                                                                                                                                                                                                                                           | Fase 11                |
-| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                                                                                                                                                                                                                                                                                           | Fase 9                 |
-| 4   | ~~Confirmar con el usuario los precios, el IGIC y las reglas de descuento~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                        | —                      |
-| 5   | ~~El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx`~~ **resuelto en la Fase 2**                                                                                                                                                                                                                                          | —                      |
-| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto                                                                                                                                                                                                                                                                         | —                      |
-| 7   | ~~Sustituir la conversión provisional de céntimos a euros de `buildPriceLabel` por el `formatEuros` probado~~ **resuelto en la Fase 3**                                                                                                                                                                                                                      | —                      |
-| 8   | El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto                                                                                                                                                                                                                                                                | Fase 4                 |
-| 9   | **Los meses de contratación no están en `BudgetLine`.** Entran con su selector, que es donde se usan                                                                                                                                                                                                                                                         | Fase 4                 |
-| 10  | **Decidir si el resumen muestra «lo que se paga hoy»** (pago inicial + primera cuota). Es presentación, no cálculo                                                                                                                                                                                                                                           | Fase 4                 |
-| 11  | **A qué subtotal se aplica el descuento por pack**: a los tres bloques o solo a alguno. La regla dice «el subtotal» y hay tres                                                                                                                                                                                                                               | Fase 6                 |
-| 12  | `calculateBudget` es el único punto de entrada del cálculo: los componentes no deben hacer cuentas por su cuenta                                                                                                                                                                                                                                             | Fases 4-7              |
-| 13  | **Añadir al apartado 1 de `CLAUDE.md` la norma de ritmo de la corrección C3-1**, autorizado por el usuario el 24/11/2026: comprobar lo que afecta al resultado o a la seguridad, y preguntar antes de lanzar investigaciones que no cambien ninguna decisión. Va al repositorio para que viaje con un clonado, igual que los finales de línea del apartado 4 | **Al abrir la Fase 4** |
+| #   | Asunto                                                                                                                                                                                                                                                                                                   | Cuándo                 |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos                                                                                                                                                                                                                                    | Fase 10                |
+| 2   | El favicon sigue siendo el de Vite                                                                                                                                                                                                                                                                       | Fase 11                |
+| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                                                                                                                                                                                                                                       | Fase 9                 |
+| 4   | ~~Confirmar con el usuario los precios, el IGIC y las reglas de descuento~~ **resuelto en la Fase 3**                                                                                                                                                                                                    | —                      |
+| 5   | ~~El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx`~~ **resuelto en la Fase 2**                                                                                                                                                                                      | —                      |
+| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto                                                                                                                                                                                                                     | —                      |
+| 7   | ~~Sustituir la conversión provisional de céntimos a euros de `buildPriceLabel` por el `formatEuros` probado~~ **resuelto en la Fase 3**                                                                                                                                                                  | —                      |
+| 8   | ~~El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto~~ **resuelto en la Fase 4**                                                                                                                                                                              | —                      |
+| 9   | ~~**Los meses de contratación no están en `BudgetLine`.** Entran con su selector~~ **resuelto en la Fase 4**: unión discriminada, meses obligatorios en la línea mensual                                                                                                                                 | —                      |
+| 10  | ~~**Decidir si el resumen muestra «lo que se paga hoy»**~~ **resuelto en la Fase 4**: sí, como línea informativa «A pagar el primer día (orientativo)», fuera del tipo `Budget` ([ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md))                                                            | —                      |
+| 11  | **A qué subtotal se aplica el descuento por pack**: a los tres bloques o solo a alguno. La regla dice «el subtotal» y hay tres                                                                                                                                                                           | Fase 6                 |
+| 12  | ~~`calculateBudget` es el único punto de entrada del cálculo: los componentes no deben hacer cuentas~~ **cumplido en la Fase 4**, y sigue vigilado en las fases 5 a 7                                                                                                                                    | Fases 5-7              |
+| 13  | ~~**Añadir al apartado 1 de `CLAUDE.md` la norma de ritmo de la corrección C3-1**~~ **resuelto al abrir la Fase 4**                                                                                                                                                                                      | —                      |
+| 14  | **Mejora opcional, solo si sobra tiempo:** resumen fijo en un lateral en pantallas anchas, para no tener que bajar hasta el final para ver los totales. Petición del usuario en la Fase 4. Es maquetación, no cálculo: **se recorta antes que cualquier cosa de la lista del apartado 9 de `CLAUDE.md`** | Fase 11, si hay margen |
 
 ### Riesgos abiertos (del inventario de la Fase 0)
 
@@ -529,39 +707,54 @@ ya no entra en el CSS.
 
 ## Siguiente paso
 
-**Fase 4 — Componentes del presupuesto con TDD.** La línea de presupuesto, el
-selector de cantidad o meses y el resumen. Toda la aritmética ya existe y está
-probada: los componentes de esta fase **llaman a `calculateBudget` y muestran lo
-que devuelve**, sin calcular nada por su cuenta (pendiente nº 12).
+**Fase 5 — Estado del presupuesto.** Context con `useReducer` y borradores en
+`localStorage` con validación.
 
-Tres decisiones que la Fase 4 tiene que tomar y que están anotadas arriba:
+El trabajo de la Fase 4 deja la fase siguiente bastante acotada:
 
-- Los **meses de contratación** entran en `BudgetLine` junto con su selector,
-  respetando el `minMonths` de cada servicio mensual (pendiente nº 9).
-- Si el resumen muestra **«lo que se paga hoy»** —pago inicial más la primera
-  cuota—, que es presentación y no cálculo (pendiente nº 10).
-- El contador provisional «Servicios seleccionados» desaparece y lo sustituye el
-  resumen (pendiente nº 8).
+- El estado ya existe y está en un solo sitio, el `useState` de `App.tsx`, con
+  **cuatro funciones** que son exactamente las acciones del reducer: alternar
+  un servicio, cambiar la cantidad, cambiar los meses y quitar.
+- **Ningún componente tendrá que cambiar.** `ServiceCatalog` seguirá recibiendo
+  `selectedIds` y `onToggle`, y `BudgetPanel` las líneas y sus tres avisos. Solo
+  cambia quién se los pasa.
+- El estado son **las líneas**, y los identificadores marcados del catálogo se
+  derivan de ellas. No hay dos listas que puedan discrepar.
+- `normalizeNumber` ya está escrita, recibe `unknown` y tiene 15 tests. Es la
+  pieza con la que se validará lo que venga de `localStorage`, que es el punto
+  del apartado 4.6 que exige no romperse con datos dañados.
 
 No se inicia sin autorización expresa del usuario.
 
 ### Aviso de plazo (apartado 9 de CLAUDE.md)
 
-A 24/11/2026, con las fases 0 a 3 cerradas, quedan **4 días de desarrollo** (25,
-26, 27 y 28) para las fases 4 a 11, porque el 29 y el 30 están reservados para
-las slides y el vídeo. Son **8 fases en 4 días: dos al día**, sin margen para un
-imprevisto.
+**El margen ha mejorado, y bastante.** El plan contaba con los días 25 a 28
+para las fases 4 a 11. A 24/11/2026 están cerradas las fases 0 a 4: la Fase 4
+se ha hecho **el mismo día 24**, que no estaba en el cálculo.
 
-Hay un dato nuevo que ayuda a calibrar: la Fase 3 —cinco ciclos TDD, 50 tests,
-un ADR y el registro— **se cerró en una sesión corta de la tarde del 24**, que
-no estaba en el cálculo de los 4 días. El ritmo real de una fase de lógica pura
-cabe de sobra en media jornada. Las que no se parecen a esta son la 8 (hay que
-descargar los navegadores de Playwright, riesgo R7) y la 9 (Husky y GitHub
+| Dato                                 | Antes de la Fase 4  | Ahora                   |
+| ------------------------------------ | ------------------- | ----------------------- |
+| Fases pendientes                     | 8 (de la 4 a la 11) | **7** (de la 5 a la 11) |
+| Días de desarrollo (25, 26, 27 y 28) | 4                   | 4                       |
+| Ritmo necesario                      | 2 fases al día      | **1,75 fases al día**   |
+
+Las dos fases cerradas el día 24 —la 3 y la 4— eran una de lógica pura y otra
+de componentes, y las dos cupieron en una sesión. Eso es la mejor estimación
+disponible para las fases 5, 6 y 7, que se parecen a ellas.
+
+**Las dos que no se parecen siguen siendo las mismas:** la Fase 8 (descarga de
+los navegadores de Playwright, riesgo **R7**) y la Fase 9 (Husky y GitHub
 Actions, que tocan configuración y pueden pelearse con Windows).
 
-El riesgo **R8** sigue abierto y es el más serio del proyecto. Según lo
-acordado, si al cerrar la **Fase 4** no se ha recuperado margen se
-**propondrán** recortes en el orden preacordado: 1) Husky, 2) tests E2E extra, 3) GitHub Actions avanzado, 4) borradores en localStorage. Nunca se recortan el
-cálculo del presupuesto, los tests de la lógica de negocio, el despliegue, el
-README, las slides ni el vídeo. Los recortes se proponen; no se aplican por
-iniciativa propia.
+**No se proponen recortes.** Estaba acordado proponerlos al cerrar la Fase 4 si
+no se había recuperado margen, y se ha recuperado. El riesgo **R8** sigue
+abierto —sigue siendo el más serio del proyecto— y el momento natural para
+revisar esto otra vez es **al cerrar la Fase 7**, cuando la aplicación esté
+funcionalmente completa y lo que quede sean calidad, despliegue y entrega. Si
+en ese punto las fases 8 y 9 amenazan los días 29 y 30, el orden preacordado
+es: 1) Husky, 2) tests E2E extra, 3) GitHub Actions avanzado, 4) borradores en
+localStorage, y ahora además, antes que todos ellos, la mejora opcional nº 14
+de la lista de arriba. Nunca se recortan el cálculo del presupuesto, los tests
+de la lógica de negocio, el despliegue, el README, las slides ni el vídeo.
+
+Los recortes se proponen; no se aplican por iniciativa propia.

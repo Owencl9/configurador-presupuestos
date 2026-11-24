@@ -1,4 +1,5 @@
 import type { BudgetLine, Subtotals } from '../../shared/types/budget'
+import { calculateLineAmountCents } from './calculateLineAmountCents'
 
 /**
  * Reparte las líneas del presupuesto en los tres subtotales del apartado 4.4:
@@ -18,8 +19,18 @@ export function calculateSubtotals(lines: readonly BudgetLine[]): Subtotals {
   let monthlyCents = 0
   let yearlyCents = 0
 
-  for (const { service, quantity } of lines) {
-    const importe = service.priceCents * quantity
+  for (const line of lines) {
+    const { service } = line
+
+    /*
+     * El importe no se calcula aquí. Hasta la Fase 4 esta línea era
+     * `service.priceCents * quantity`, y entonces era el único sitio que
+     * multiplicaba. Al mostrar el importe de cada línea en pantalla apareció un
+     * segundo sitio, así que la multiplicación se extrajo a su propia función
+     * con sus tests, y esta pasó a llamarla. Las nueve comprobaciones de
+     * `calculateSubtotals.test.ts` siguieron en verde sin tocar ninguna.
+     */
+    const importe = calculateLineAmountCents(line)
 
     /*
      * `switch` sobre `service.payment`, que es el discriminante de la unión

@@ -7,26 +7,102 @@
  * en `features/budget/`.
  */
 
-import type { Service } from './service'
+import type { MonthlyService, OneTimeService, YearlyService } from './service'
 
 /**
- * Un servicio añadido al presupuesto, con la cantidad contratada.
+ * Lo común a las tres clases de línea: el servicio y cuántas unidades se
+ * contratan.
  *
  * `quantity` es un entero mayor o igual que 1, y significa lo mismo en las tres
  * formas de pago: cuántas unidades del servicio se contratan. Dos landing pages
  * son `quantity: 2`, y la cuota mensual de dos planes de SEO es el doble de uno.
  *
- * **Los meses de contratación no están aquí todavía.** Entran en la Fase 4,
- * junto con el selector que los elige, porque es ahí donde se usan: hacen falta
- * para el descuento por permanencia (Fase 6) y para el total comprometido, y
- * ninguno de los dos existe en la Fase 3. Decisión del usuario al aprobar el
- * plan de la fase: el tipo crece cuando crece su uso, no antes.
+ * No se exporta: los tipos que se usan son los tres de abajo y su unión,
+ * `BudgetLine`.
  */
-export interface BudgetLine {
-  readonly service: Service
+interface BudgetLineBase {
   /** Unidades contratadas. Entero mayor o igual que 1. */
   readonly quantity: number
 }
+
+/** Línea de un servicio de pago único. No tiene meses de contratación. */
+export interface OneTimeBudgetLine extends BudgetLineBase {
+  readonly service: OneTimeService
+}
+
+/** Línea de un servicio de pago anual. No tiene meses de contratación. */
+export interface YearlyBudgetLine extends BudgetLineBase {
+  readonly service: YearlyService
+}
+
+/**
+ * Línea de un servicio mensual, con los meses de contratación elegidos.
+ *
+ * `months` es **obligatorio**: una línea mensual sin meses no compila. Es la
+ * diferencia práctica con un campo opcional, que obligaría a cada lector a
+ * decidir un valor de reserva, y el valor de reserva es donde se esconde un
+ * error.
+ *
+ * Los meses **no multiplican la cuota**: `monthlyCents` sigue siendo lo que se
+ * paga cada mes. Son el dato del descuento por permanencia de la Fase 6.
+ */
+export interface MonthlyBudgetLine extends BudgetLineBase {
+  readonly service: MonthlyService
+  /**
+   * Meses contratados. Entero, nunca por debajo del `minMonths` del servicio y
+   * nunca por encima de `MAX_MONTHS` (`shared/constants/business-rules.ts`).
+   */
+  readonly months: number
+}
+
+/**
+ * Un servicio añadido al presupuesto.
+ *
+ * **Unión discriminada**, con el mismo criterio que `Service` en la Fase 2
+ * ([ADR 0006](../../../docs/adr/0006-niveles-como-servicios-independientes.md)):
+ * los datos imposibles no deben compilar. Da estas dos garantías:
+ *
+ * 1. Una línea mensual **tiene** meses, y el tipo es `number`, no
+ *    `number | undefined`.
+ * 2. **Leer `months` obliga a comprobar antes la forma de pago**, pasando por
+ *    `isMonthlyLine`. No hay forma de leerlo «por si acaso» y poner un valor de
+ *    reserva, que es donde se esconden los errores de este tipo.
+ *
+ * Las dos están probadas con `@ts-expect-error` en
+ * `features/budget/isMonthlyLine.test.ts`: lo que se comprueba ocurre al
+ * compilar, y si el compilador dejara de rechazar esas líneas, el propio
+ * comentario pasaría a ser un error y `npm run build` fallaría.
+ *
+ * ## La garantía que este tipo NO da
+ *
+ * **Escribir `months` en una línea de pago único o anual compila.** Es un dato
+ * imposible que el compilador no detiene, al contrario de lo que ocurre con el
+ * `minMonths` de `Service`, y conviene saber por qué.
+ *
+ * En `Service`, `payment` es un discriminante del propio objeto: TypeScript
+ * elige el miembro de la unión que corresponde y rechaza los campos sobrantes.
+ * En `BudgetLine` el discriminante está **anidado** (`service.payment`), así
+ * que TypeScript no puede elegir miembro y comprueba los campos contra la suma
+ * de los tres.
+ *
+ * Se puede cerrar declarando `months?: never` en los dos tipos no mensuales,
+ * pero entonces el campo **existe** en los tres miembros y se pierde la
+ * garantía 2: `linea.months` se lee en cualquier línea como
+ * `number | undefined`. Medido en la Fase 4; las dos son incompatibles y se
+ * eligió conservar la 2, porque las lecturas están repartidas por todos los
+ * componentes y las escrituras pasan por un solo sitio.
+ *
+ * **Ese sitio es `createBudgetLine`**, en `features/budget/`, y es lo que
+ * sustituye a la garantía que falta: es la única función que construye líneas,
+ * decide los meses según la forma de pago y tiene tests que lo comprueban. Si
+ * alguna vez hay un segundo constructor de líneas, esta nota deja de ser
+ * cierta.
+ *
+ * Por el mismo motivo —el discriminante anidado— para leer `months` hay que
+ * pasar por `isMonthlyLine`, en `features/budget/`.
+ */
+export type BudgetLine =
+  OneTimeBudgetLine | MonthlyBudgetLine | YearlyBudgetLine
 
 /**
  * Los tres subtotales del presupuesto, separados por forma de pago

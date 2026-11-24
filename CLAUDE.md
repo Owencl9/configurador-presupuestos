@@ -19,6 +19,14 @@ y manda sobre este archivo en caso de duda.
 - Ante un error, identificar la causa y proponer una solución concreta. No
   reestructurar la aplicación para arreglar un problema pequeño.
 - No añadir funcionalidades que no estén en la especificación.
+- **Prioriza avanzar.** Hay que hacer las comprobaciones que afecten al
+  resultado o a la seguridad, y evitar las investigaciones que no cambien
+  ninguna decisión. Ante la duda de si una comprobación es de las primeras o de
+  las segundas, **preguntar antes de lanzarla**, no decidirlo por cuenta propia.
+  El criterio es una pregunta: _¿cambia esto alguna decisión?_ Norma acordada al
+  autorizar la Fase 3 (corrección C3-1) y continuación de la C2-4 de la Fase 2:
+  la lección de una fase se convierte en regla de la siguiente, y la regla llega
+  antes del trabajo.
 - **Una comprobación previa no puede ir en el mismo comando que la acción que
   condiciona.** Si un comando comprueba algo y después borra, modifica o
   publica, el resultado de la comprobación no impide nada. Dos pasos: primero
@@ -80,6 +88,17 @@ No revertir ninguno de los tres ni confiar en `core.autocrlf`.
   el control falla, se repite la revisión con **otra herramienta**, no con otro
   intento. Ocurrió en la Fase 2 (problema P9): diez categorías en verde porque
   la búsqueda recorría los nombres de archivo y no su contenido.
+- **Ningún mensaje de comprobación puede afirmar que algo ha ido bien sin
+  depender del resultado real del comando.** Un rótulo escrito a mano como
+  «sin errores» o «todo correcto» se imprime igual cuando el comando ha
+  fallado, y entonces el informe dice lo contrario de lo que ha pasado. Si hay
+  que rotular una comprobación, el texto describe **qué se ha ejecutado**, no
+  cómo ha salido («fin de la salida de tsc»), o bien se encadena de forma que
+  solo se imprima si el comando ha tenido éxito. Ocurrió en la Fase 4: un eco
+  de «tsc sin errores» salió por pantalla junto a un error de compilación,
+  porque iba detrás de un `;` en lugar de un `&&`. Es la misma familia de
+  problemas que el control positivo: una comprobación que no puede dar un
+  resultado negativo no es una comprobación.
 - **Los datos de terceros son tan sensibles como los propios**, y además no se
   pueden rotar. No se versionan documentos ajenos —material docente del máster,
   por ejemplo— ni nombres, correos o datos de contacto de otras personas.

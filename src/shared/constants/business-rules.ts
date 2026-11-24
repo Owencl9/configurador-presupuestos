@@ -75,3 +75,48 @@ export const AMOUNT_DISCOUNT_PERCENT = 5
  * estrategias.
  */
 export const MAX_TOTAL_DISCOUNT_PERCENT = 20
+
+/* -----------------------------------------------------------------------------
+ * Límites de los selectores (Fase 4)
+ *
+ * No son reglas de precio, pero sí son reglas: deciden qué se puede escribir en
+ * una línea del presupuesto. Están aquí, y no en el componente que dibuja el
+ * selector, por dos razones. La primera es el apartado 4.3: un único archivo de
+ * constantes. La segunda es que el tope de meses tiene que convivir con el
+ * mínimo del descuento por permanencia, y las dos cosas solo se pueden mirar a
+ * la vez si están en el mismo sitio. Hay un test que lo vigila.
+ *
+ * Desde la Fase 5 estos límites se aplicarán también a lo que se lea de
+ * `localStorage`, que es la otra vía por la que puede entrar un número absurdo.
+ * -------------------------------------------------------------------------- */
+
+/**
+ * Unidades mínimas de una línea del presupuesto.
+ *
+ * Una línea con cero unidades no es una línea con cero: es una línea que
+ * habría que haber borrado. Quitar un servicio se hace con su botón.
+ */
+export const MIN_QUANTITY = 1
+
+/**
+ * Unidades máximas de una línea del presupuesto.
+ *
+ * Dos dígitos son de sobra para una agencia: nadie contrata cien webs
+ * corporativas, y si alguna vez ocurre es una conversación, no un formulario.
+ * El tope mantiene además la aritmética muy lejos de cualquier límite de
+ * JavaScript: 99 unidades del servicio más caro del catálogo son 247.500 €.
+ */
+export const MAX_QUANTITY = 99
+
+/**
+ * Meses máximos de contratación de un servicio mensual.
+ *
+ * Tres años. Un contrato de servicios web más largo que eso no es realista en
+ * este negocio y debería plantearse como un presupuesto nuevo.
+ *
+ * **Tiene que estar por encima de `COMMITMENT_DISCOUNT_MIN_MONTHS`.** Un tope
+ * por debajo de esos 12 meses dejaría el descuento por permanencia
+ * inalcanzable, sin ningún error que lo delatara: solo una regla de negocio que
+ * no se cumple nunca. Hay un test de coherencia que lo comprueba.
+ */
+export const MAX_MONTHS = 36

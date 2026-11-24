@@ -37,10 +37,22 @@ const HOSTING: YearlyService = {
   payment: 'yearly',
 }
 
-const linea = (service: BudgetLine['service'], quantity = 1): BudgetLine => ({
-  service,
-  quantity,
-})
+/**
+ * Atajo para escribir una línea de presupuesto en los tests. Desde la Fase 4
+ * una línea mensual lleva meses obligatoriamente; se ponen los mínimos del
+ * servicio. Ninguna de las nueve comprobaciones de este archivo cambió al
+ * crecer el tipo.
+ */
+function linea(service: BudgetLine['service'], quantity = 1): BudgetLine {
+  switch (service.payment) {
+    case 'monthly':
+      return { service, quantity, months: service.minMonths }
+    case 'one-time':
+      return { service, quantity }
+    case 'yearly':
+      return { service, quantity }
+  }
+}
 
 /*
  * El tipo de IGIC se pasa explícito (7) en los tests que comprueban importes,

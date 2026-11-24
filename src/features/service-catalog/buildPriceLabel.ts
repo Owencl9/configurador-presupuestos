@@ -1,21 +1,5 @@
-import type { PaymentType, Service } from '../../shared/types/service'
-import { formatEuros } from '../../shared/utils/formatEuros'
-
-/**
- * Sufijo que acompaña al importe según la forma de pago.
- *
- * Es un `Record` con una clave por cada valor de `PaymentType`, no un `switch`
- * ni una cadena de `if`. La ventaja es que el compilador exige que estén
- * **todas** las claves: si algún día se añadiera una cuarta forma de pago al
- * tipo `PaymentType`, este objeto dejaría de compilar y el error aparecería
- * aquí, en el sitio donde hay que decidir qué sufijo le corresponde, en lugar
- * de pasar desapercibido y mostrar un precio sin unidad.
- */
-const SUFIJOS: Record<PaymentType, string> = {
-  'one-time': '',
-  monthly: '/mes',
-  yearly: '/año',
-}
+import type { Service } from '../../shared/types/service'
+import { buildAmountLabel } from '../../shared/utils/buildAmountLabel'
 
 /**
  * Texto del precio de un servicio, listo para mostrar en una `ServiceCard`:
@@ -23,14 +7,21 @@ const SUFIJOS: Record<PaymentType, string> = {
  *
  * `ServiceCard` recibe el precio ya formateado y no calcula nada (decisión de
  * la Fase 1), así que alguien tiene que construir ese texto. Ese alguien es
- * esta función, que vive en la funcionalidad del catálogo porque el sufijo
- * `/mes` o `/año` es presentación del catálogo, no una regla de negocio.
+ * esta función, que vive en la funcionalidad del catálogo porque lo que hace es
+ * decidir **qué** importe de un servicio se muestra en su tarjeta: el precio.
  *
- * El importe lo formatea `formatEuros`, en `shared/utils`. Aquí vivió una
- * conversión provisional durante la Fase 2, con el acuerdo de sustituirla por la
- * función probada en cuanto existiera; se borró en la Fase 3 y los ocho tests de
- * este archivo siguieron en verde sin tocar ni uno.
+ * Lo que no vive aquí es *cómo* se escribe un importe con su sufijo. Eso está
+ * en `shared/utils/buildAmountLabel`, porque desde la Fase 4 lo necesita
+ * también el presupuesto, para el precio unitario y el importe de cada línea.
+ * Esta función se quedó en dos líneas, y es la señal de que ya no hace nada
+ * propio salvo elegir el importe.
+ *
+ * Historia de este archivo, que resume bien el proyecto: en la Fase 2 tenía
+ * dentro una conversión provisional de céntimos a euros; la Fase 3 la sustituyó
+ * por `formatEuros`; la Fase 4 se ha llevado la tabla de sufijos a `shared/`.
+ * Sus **ocho tests no han cambiado ni una línea en ninguno de los tres
+ * cambios**, porque describen lo que la función produce y no cómo lo hace.
  */
 export function buildPriceLabel(service: Service): string {
-  return `${formatEuros(service.priceCents)}${SUFIJOS[service.payment]}`
+  return buildAmountLabel(service.priceCents, service.payment)
 }

@@ -6,7 +6,10 @@ import {
   COMMITMENT_DISCOUNT_MIN_MONTHS,
   COMMITMENT_DISCOUNT_PERCENT,
   IGIC_RATE_PERCENT,
+  MAX_MONTHS,
+  MAX_QUANTITY,
   MAX_TOTAL_DISCOUNT_PERCENT,
+  MIN_QUANTITY,
   PACK_DISCOUNT_MIN_SERVICES,
   PACK_DISCOUNT_PERCENT,
 } from './business-rules'
@@ -86,6 +89,46 @@ describe('reglas de negocio', () => {
       // partir de 30 € y el error pasaría desapercibido.
       expect(Number.isInteger(AMOUNT_DISCOUNT_THRESHOLD_CENTS)).toBe(true)
       expect(AMOUNT_DISCOUNT_THRESHOLD_CENTS).toBeGreaterThan(0)
+    })
+  })
+
+  /*
+   * Límites de los selectores (Fase 4).
+   *
+   * No son reglas de precio, pero son reglas: deciden qué puede escribir una
+   * persona en el presupuesto y, desde la Fase 5, qué se acepta de un borrador
+   * guardado. Viven aquí porque el apartado 4.3 pide un único archivo de
+   * constantes, y porque el tope de meses tiene que convivir con el mínimo del
+   * descuento por permanencia, que está dos bloques más arriba.
+   */
+  describe('límites de cantidad y meses', () => {
+    it('exige una unidad como mínimo de cantidad', () => {
+      // Una línea con cero unidades no es una línea con cero: es una línea que
+      // habría que haber borrado.
+      expect(Number.isInteger(MIN_QUANTITY)).toBe(true)
+      expect(MIN_QUANTITY).toBeGreaterThanOrEqual(1)
+    })
+
+    it('pone el tope de cantidad por encima del mínimo', () => {
+      expect(Number.isInteger(MAX_QUANTITY)).toBe(true)
+      expect(MAX_QUANTITY).toBeGreaterThan(MIN_QUANTITY)
+    })
+
+    it('pone el tope de meses por encima del mínimo del descuento por permanencia', () => {
+      /*
+       * **El test importante de este bloque.** Si el tope de meses bajara por
+       * debajo de los 12 del descuento por permanencia, ese descuento quedaría
+       * inalcanzable: nadie podría contratar los meses que hacen falta para
+       * activarlo. No daría ningún error —ni de compilación, ni en pantalla—,
+       * solo una regla de negocio que no se cumple nunca y un presupuesto más
+       * caro de lo que dice la especificación.
+       *
+       * Es el mismo criterio que el test de «ningún descuento supera el tope»
+       * de más arriba: lo que se vigila no es un valor, es que dos valores
+       * sigan teniendo sentido juntos.
+       */
+      expect(Number.isInteger(MAX_MONTHS)).toBe(true)
+      expect(MAX_MONTHS).toBeGreaterThan(COMMITMENT_DISCOUNT_MIN_MONTHS)
     })
   })
 })

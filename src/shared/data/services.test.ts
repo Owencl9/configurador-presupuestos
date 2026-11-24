@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { AMOUNT_DISCOUNT_THRESHOLD_CENTS } from '../constants/business-rules'
+import {
+  AMOUNT_DISCOUNT_THRESHOLD_CENTS,
+  MAX_MONTHS,
+} from '../constants/business-rules'
 import type { Service } from '../types/service'
 import { CATEGORIES, SERVICES } from './services'
 
@@ -86,6 +89,28 @@ describe('catálogo de servicios', () => {
       // unión discriminada funcionando.
       expect(Number.isInteger(servicio.minMonths)).toBe(true)
       expect(servicio.minMonths).toBeGreaterThanOrEqual(1)
+    }
+  })
+
+  it('no da a ningún servicio mensual un mínimo por encima del tope de meses', () => {
+    /*
+     * El catálogo y el tope del selector se editan en archivos distintos, y
+     * nada obliga a mirar uno al cambiar el otro. Un servicio con un mínimo de
+     * 48 meses y un tope de 36 sería imposible de añadir al presupuesto: el
+     * selector nacería con un valor que su propio máximo no admite.
+     *
+     * El mensaje nombra el servicio, para que el fallo diga cuál hay que
+     * arreglar en lugar de solo que hay uno.
+     */
+    const mensuales = SERVICES.filter(
+      (servicio) => servicio.payment === 'monthly',
+    )
+
+    for (const servicio of mensuales) {
+      expect(
+        servicio.minMonths,
+        `«${servicio.name}» exige más meses de los que el selector permite elegir`,
+      ).toBeLessThanOrEqual(MAX_MONTHS)
     }
   })
 

@@ -10,12 +10,14 @@ Trabajo Final de Máster — Máster en Desarrollo con Inteligencia Artificial
 
 **🔗 Aplicación en funcionamiento: https://configurador-presupuestos.vercel.app**
 
-> **Estado: en desarrollo (Fase 3 de 11 completada).** La aplicación ya está
-> desplegada y se actualiza automáticamente con cada `push`. El catálogo de
-> servicios es el definitivo y **la aritmética del presupuesto ya está
-> implementada y probada**: subtotales separados por forma de pago, base
-> imponible e IGIC al 7 %, todo en céntimos enteros. Lo que falta es la interfaz
-> que la usa (Fase 4), el estado (Fase 5) y los descuentos (Fase 6).
+> **Estado: en desarrollo (Fase 4 de 11 completada).** La aplicación ya está
+> desplegada y se actualiza automáticamente con cada `push`. **El presupuesto
+> funciona de principio a fin**: se añaden servicios del catálogo, se eligen la
+> cantidad y los meses respetando los mínimos de cada servicio, y el resumen se
+> actualiza al instante con el pago inicial, la cuota mensual y el pago anual,
+> cada uno con su base imponible, su IGIC al 7 % y su total. Lo que falta son
+> los borradores guardados (Fase 5), los descuentos (Fase 6) y el documento
+> imprimible para el cliente (Fase 7).
 
 > ### ⚠️ Los precios son ficticios
 >
@@ -85,14 +87,14 @@ específico de cada funcionalidad en su propia carpeta.
 ├── public/                 Archivos servidos tal cual
 └── src/
     ├── features/           Código propio de cada funcionalidad
-    │   ├── budget/           Cálculo: subtotales, IGIC y orden de cálculo
+    │   ├── budget/           Presupuesto: cálculo, líneas, resumen y panel
     │   └── service-catalog/  Catálogo: agrupación por categorías y formato del precio
     ├── shared/             Código usado por varias funcionalidades
-    │   ├── components/     Componentes reutilizables (ServiceCard)
-    │   ├── constants/      Reglas de negocio y sus valores (IGIC, descuentos)
+    │   ├── components/     Componentes reutilizables (ServiceCard, QuantitySelector)
+    │   ├── constants/      Reglas de negocio y sus valores (IGIC, descuentos, límites)
     │   ├── data/           Catálogo de servicios (archivo de datos editable)
     │   ├── types/          Tipos de TypeScript del dominio
-    │   └── utils/          Utilidades compartidas (formato de importes en euros)
+    │   └── utils/          Utilidades compartidas (formato de importes, normalización)
     └── test/               Configuración común de los tests
 ```
 
@@ -122,8 +124,17 @@ propias. Ver
 
 Los valores viven en un **único archivo**,
 [`src/shared/constants/business-rules.ts`](src/shared/constants/business-rules.ts):
-el tipo de IGIC, los tres descuentos y el tope del 20 %. Cambiar el IGIC es
-cambiar un número en ese archivo, y no hay ningún otro sitio que haya que tocar.
+el tipo de IGIC, los tres descuentos, el tope del 20 % y los límites de los
+selectores (cantidad de 1 a 99 y hasta 36 meses de contratación). Cambiar el
+IGIC es cambiar un número en ese archivo, y no hay ningún otro sitio que haya
+que tocar.
+
+Ese archivo tiene además **tests de coherencia**, porque está hecho para
+editarse a mano y una edición incoherente no da ningún error visible. Vigilan,
+por ejemplo, que ningún descuento individual supere el tope del 20 % y que el
+máximo de meses esté por encima de los 12 que activan el descuento por
+permanencia: un tope menor dejaría ese descuento inalcanzable sin que nada
+avisara.
 
 El orden de cálculo es **subtotal → descuentos → base imponible → IGIC →
 total**, y se aplica por separado a cada forma de pago. El presupuesto no tiene
@@ -141,12 +152,16 @@ de pago y después de los descuentos
 
 - ✅ Catálogo de servicios agrupados por categoría, con pago único, mensual o anual
 - ✅ Cálculo del presupuesto: subtotales por forma de pago, base imponible e IGIC
+- ✅ Construcción del presupuesto: añadir y quitar servicios, elegir la cantidad y
+  los meses respetando el mínimo de cada servicio
+- ✅ Desglose en pantalla del pago inicial, la cuota mensual y el pago anual, cada
+  uno con su base imponible, su IGIC y su total
+- ✅ Línea informativa de lo que se paga el primer día
+  ([ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md))
 
 ### Previstas
 
-- Construcción del presupuesto con cantidades y permanencias mínimas
 - Descuentos por pack, permanencia e importe, con tope máximo del 20 %
-- Desglose en pantalla del pago inicial, la cuota mensual y los pagos anuales
 - Datos del cliente, número de presupuesto y validez
 - Vista imprimible del presupuesto, para guardar como PDF desde el navegador
 - Borradores guardados en el navegador
@@ -178,8 +193,12 @@ cabecera que puede dejar la página en blanco si se escribe mal.
 ## Metodología
 
 - **TDD** en toda la lógica de negocio: primero el test, se comprueba que falla,
-  después la implementación mínima y por último la refactorización. **87 tests
-  en verde** al cerrar la Fase 3.
+  después la implementación mínima y por último la refactorización. **190 tests
+  en verde** al cerrar la Fase 4.
+- **Accesibilidad** desde el primer componente: todo operable con teclado,
+  encabezados sin saltos, regiones con nombre, y ninguna información
+  transmitida solo con el color. Los tests consultan por rol y por nombre
+  accesible, no por clases de CSS.
 - **Dinero en céntimos**: todos los cálculos internos usan enteros, para evitar
   los errores de redondeo de los decimales. Ver
   [ADR 0003](docs/adr/0003-dinero-en-centimos.md).
