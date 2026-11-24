@@ -4,6 +4,15 @@
 **Estado:** aceptada
 **Fase:** 1 (se aplica a partir de la Fase 3)
 
+> **Actualización (Fase 3).** La decisión de fondo —enteros en céntimos— se
+> mantiene y está implementada. Un detalle de esta ADR quedó desmentido al
+> aplicarla: el formateo **no** usa `Intl.NumberFormat`, porque en español no
+> pone el separador de millares en los importes de cuatro cifras
+> (`1200,00 €` en lugar de `1.200,00 €`). Lo hace una función propia,
+> `shared/utils/formatEuros.ts`. El redondeo, que aquí solo se enunciaba como
+> «`Math.round()` explícito y documentado», está decidido y razonado en
+> [ADR 0007](0007-redondeo-del-igic.md).
+
 ## Contexto
 
 La aplicación suma importes, aplica varios descuentos en cascada y calcula el

@@ -1,9 +1,10 @@
 # Estado del desarrollo
 
 **Última actualización:** 24/11/2026
-**Fase actual:** Fase 2 completada, publicada (`8814d83`) y **verificada en
-producción**. La Fase 3 empieza confirmando las reglas de negocio, los precios y
-el tipo de IGIC, y se abordará en una conversación nueva.
+**Fase actual:** **Fase 3 completada**. Reglas de negocio confirmadas y
+centralizadas, `formatEuros`, subtotales por forma de pago y cálculo del IGIC,
+todo con TDD. 87 tests en verde. Pendiente de commit y de verificación en
+producción.
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**privado** hasta la Fase 10)
 **Aplicación desplegada:** https://configurador-presupuestos.vercel.app
@@ -20,7 +21,7 @@ el tipo de IGIC, y se abordará en una conversación nueva.
 | 1    | Proyecto inicial, Tailwind, Vitest, Git y `ServiceCard` con TDD              | ✅ cerrada 24/11/2026 |
 | —    | **Despliegue adelantado en Vercel** (decisión del apartado 9.2 de la Fase 0) | ✅ hecho 24/11/2026   |
 | 2    | Tipos de TypeScript y catálogo de servicios                                  | ✅ cerrada 24/11/2026 |
-| 3    | Lógica de negocio con TDD: formato de euros, subtotales, IGIC                | pendiente             |
+| 3    | Lógica de negocio con TDD: formato de euros, subtotales, IGIC                | ✅ cerrada 24/11/2026 |
 | 4    | Componentes del presupuesto con TDD                                          | pendiente             |
 | 5    | Estado con Context + useReducer y borradores en localStorage                 | pendiente             |
 | 6    | Descuentos con patrón Strategy                                               | pendiente             |
@@ -331,18 +332,147 @@ un archivo minificado puede dar un negativo falso.
 
 ---
 
+## Completado en la Fase 3
+
+### Reglas de negocio confirmadas y centralizadas
+
+`src/shared/constants/business-rules.ts` es **el único archivo donde se cambian
+estos valores**, como exige el apartado 4.3. Los porcentajes se guardan como
+número (`7`), no como factor (`0.07`), para que la aritmética siga siendo de
+enteros.
+
+| Regla                 | Valor confirmado                          | Implementada |
+| --------------------- | ----------------------------------------- | ------------ |
+| IGIC                  | 7 %, configurable                         | ✅ Fase 3    |
+| Descuento por pack    | 3 servicios distintos → 5 % del subtotal  | Fase 6       |
+| Descuento permanencia | 12 meses o más → 10 % de esos servicios   | Fase 6       |
+| Descuento por importe | pago único > 3.000 € → 5 % del pago único | Fase 6       |
+| Tope de descuento     | 20 % como máximo                          | Fase 6       |
+
+Los precios del catálogo **no cambian**: siguen siendo los 12 servicios de la
+Fase 2, con sus importes ficticios. El usuario confirmó las reglas, no los
+precios.
+
+El archivo tiene su propio test de coherencia, con el mismo criterio que los
+tests de datos de la Fase 2: porcentajes enteros entre 0 y 100, umbral en
+céntimos positivos, y **ningún descuento individual por encima del tope**, para
+que subir uno al 25 % con el tope en el 20 % dé un fallo con nombre en lugar de
+un valor que no significa nada.
+
+### El cálculo
+
+| Archivo                                 | Qué hace                                                       | Tests |
+| --------------------------------------- | -------------------------------------------------------------- | ----- |
+| `shared/utils/formatEuros.ts`           | céntimos → `1.200,00 €`, `-62,50 €`                            | 13    |
+| `shared/types/budget.ts`                | `BudgetLine`, `Subtotals`, `PaymentBlock`, `Budget`            | —     |
+| `features/budget/calculateSubtotals.ts` | reparte las líneas en pago inicial, cuota mensual y pago anual | 9     |
+| `features/budget/calculateIgic.ts`      | el IGIC redondeado a céntimos                                  | 9     |
+| `features/budget/calculateBudget.ts`    | el orden de cálculo completo, tres bloques                     | 9     |
+| `shared/constants/business-rules.ts`    | las reglas y sus valores                                       | 10    |
+
+**Cinco ciclos rojo-verde completos**, cada uno con su fallo comprobado antes de
+implementar (`Failed to resolve import …`, 0 tests ejecutados). **50 tests
+nuevos; 87 en verde con los anteriores.**
+
+### El redondeo del IGIC
+
+Decidido y razonado en
+[ADR 0007](docs/adr/0007-redondeo-del-igic.md). En una línea:
+`Math.round((baseCents * ratePercent) / 100)`.
+
+- Se multiplica por el porcentaje **entero** y se divide al final.
+- **Redondeo comercial:** al céntimo más cercano, empates hacia arriba.
+- **Un único redondeo por bloque de pago**, sobre la base completa y después de
+  los descuentos. Nunca línea a línea: siete líneas de 0,07 € dan **0 céntimos**
+  de IGIC si se redondea por línea y **3** si se redondea sobre la base.
+- Admite tipos con medio punto (el 9,5 % funciona exacto) pero no décimas
+  sueltas. Hay un test que vigila la condición.
+
+### Tres bloques de pago, sin total general
+
+`Budget` son tres `PaymentBlock` independientes, cada uno con subtotal,
+descuento, base imponible, IGIC y total:
+
+```
+Pago inicial    2.500,00 €  + IGIC 175,00 €  =   2.675,00 €
+Cuota mensual     250,00 €  + IGIC  17,50 €  =     267,50 € /mes
+Pago anual        120,00 €  + IGIC   8,40 €  =     128,40 € /año
+```
+
+No hay un total general, y es deliberado: sumar los tres daría 2.870 €, un
+importe que el cliente no paga en ningún momento. Lo que se paga el primer día
+es una decisión de presentación y le corresponde al resumen de la Fase 4.
+
+El hueco `discountCents` existe ya en cada bloque y vale **0** en toda la Fase 3. Es donde la Fase 6 escribirá el resultado de las estrategias, sin cambiar la
+forma del presupuesto.
+
+### Lo provisional de la Fase 2, retirado
+
+La conversión de céntimos a euros que vivía dentro de `buildPriceLabel` **se ha
+borrado**. Ahora llama a `formatEuros`, y sus **ocho tests siguieron en verde
+sin modificar ni uno**: los mismos tests contra una implementación distinta.
+Resuelve el pendiente nº 7.
+
+Dos hallazgos al hacerlo:
+
+- **`Intl.NumberFormat` no sirve para este formato.** En español no pone el
+  separador de millares en los importes de cuatro cifras: devuelve `1200,00 €`,
+  no `1.200,00 €`. No es un error de la herramienta, es la norma de la RAE. La
+  especificación fija el formato con separador, así que `formatEuros` está
+  escrita a mano. Ver el problema **P10** del registro de la fase.
+- **La función provisional tenía un error que llevaba una fase en producción.**
+  Con un importe negativo devolvía `-62,-50 €`, porque en JavaScript el resto de
+  una división negativa también es negativo. Era inalcanzable —ningún precio del
+  catálogo es negativo— y habría dado la cara en la Fase 6, donde un descuento
+  se muestra en negativo. Ver el problema **P11**.
+
+### Documentación
+
+- [ADR 0007](docs/adr/0007-redondeo-del-igic.md): el redondeo del IGIC y los
+  tres bloques de pago.
+- **Nota de actualización en el [ADR 0003](docs/adr/0003-dinero-en-centimos.md)**:
+  decía que el formateo usaría `Intl.NumberFormat`, y la Fase 3 lo ha
+  desmentido. Se anota, no se reescribe: un ADR registra lo que se decidió y con
+  qué información.
+- `docs/prompts/fase-03.md` con el registro de la fase.
+
+---
+
+## Verificaciones de la Fase 3
+
+| Comprobación           | Resultado                                                         |
+| ---------------------- | ----------------------------------------------------------------- |
+| `npm run format:check` | sin cambios pendientes (tras reformatear 4 archivos nuevos)       |
+| `npm run lint`         | 0 errores, 0 avisos                                               |
+| `npm test`             | **87 de 87 en verde** (37 anteriores + 50 nuevos)                 |
+| `npm run build`        | correcto — 224,88 kB de JS (70,73 kB comprimido), 11,42 kB de CSS |
+
+No se ha instalado ninguna dependencia nueva, así que `npm audit` no cambia
+respecto a la Fase 1.
+
+**El CSS cambió de nombre y creció 30 bytes** aunque esta fase no ha tocado
+ningún estilo. Es el problema **P7** de la Fase 2, ya diagnosticado: Tailwind
+extrae candidatos a clase del texto de los archivos `.ts`. Está decidido que no
+se corrige (corrección C2-4). Se anota y no se investiga.
+
+---
+
 ## Pendiente y vigilado
 
-| #   | Asunto                                                                                                              | Cuándo  |
-| --- | ------------------------------------------------------------------------------------------------------------------- | ------- |
-| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos                                               | Fase 10 |
-| 2   | El favicon sigue siendo el de Vite                                                                                  | Fase 11 |
-| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                                                  | Fase 9  |
-| 4   | Confirmar con el usuario los precios, el IGIC y las reglas de descuento                                             | Fase 3  |
-| 5   | ~~El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx`~~ **resuelto en la Fase 2** | —       |
-| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto                                | —       |
-| 7   | Sustituir la conversión provisional de céntimos a euros de `buildPriceLabel` por el `formatEuros` probado           | Fase 3  |
-| 8   | El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto                       | Fase 4  |
+| #   | Asunto                                                                                                                                  | Cuándo    |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos                                                                   | Fase 10   |
+| 2   | El favicon sigue siendo el de Vite                                                                                                      | Fase 11   |
+| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                                                                      | Fase 9    |
+| 4   | ~~Confirmar con el usuario los precios, el IGIC y las reglas de descuento~~ **resuelto en la Fase 3**                                   | —         |
+| 5   | ~~El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx`~~ **resuelto en la Fase 2**                     | —         |
+| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto                                                    | —         |
+| 7   | ~~Sustituir la conversión provisional de céntimos a euros de `buildPriceLabel` por el `formatEuros` probado~~ **resuelto en la Fase 3** | —         |
+| 8   | El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto                                           | Fase 4    |
+| 9   | **Los meses de contratación no están en `BudgetLine`.** Entran con su selector, que es donde se usan                                    | Fase 4    |
+| 10  | **Decidir si el resumen muestra «lo que se paga hoy»** (pago inicial + primera cuota). Es presentación, no cálculo                      | Fase 4    |
+| 11  | **A qué subtotal se aplica el descuento por pack**: a los tres bloques o solo a alguno. La regla dice «el subtotal» y hay tres          | Fase 6    |
+| 12  | `calculateBudget` es el único punto de entrada del cálculo: los componentes no deben hacer cuentas por su cuenta                        | Fases 4-7 |
 
 ### Riesgos abiertos (del inventario de la Fase 0)
 
@@ -358,24 +488,39 @@ un archivo minificado puede dar un negativo falso.
 
 ## Siguiente paso
 
-**Fase 3 — Lógica de negocio con TDD.** Empieza **confirmando con el usuario**
-las reglas de negocio del apartado 4.3: los precios (hoy ficticios), los
-porcentajes de descuento, el tope del 20 % y el tipo de IGIC. Después: formato
-de euros (`formatEuros`, que sustituye la conversión provisional de la Fase 2),
-subtotales, separación entre pago único, mensual y anual, y cálculo del IGIC.
-Todo con TDD y con las constantes centralizadas en un único archivo.
+**Fase 4 — Componentes del presupuesto con TDD.** La línea de presupuesto, el
+selector de cantidad o meses y el resumen. Toda la aritmética ya existe y está
+probada: los componentes de esta fase **llaman a `calculateBudget` y muestran lo
+que devuelve**, sin calcular nada por su cuenta (pendiente nº 12).
+
+Tres decisiones que la Fase 4 tiene que tomar y que están anotadas arriba:
+
+- Los **meses de contratación** entran en `BudgetLine` junto con su selector,
+  respetando el `minMonths` de cada servicio mensual (pendiente nº 9).
+- Si el resumen muestra **«lo que se paga hoy»** —pago inicial más la primera
+  cuota—, que es presentación y no cálculo (pendiente nº 10).
+- El contador provisional «Servicios seleccionados» desaparece y lo sustituye el
+  resumen (pendiente nº 8).
 
 No se inicia sin autorización expresa del usuario.
 
 ### Aviso de plazo (apartado 9 de CLAUDE.md)
 
-A 24/11/2026, con las fases 0, 1 y 2 cerradas, quedan **4 días de desarrollo**
-(25, 26, 27 y 28) para las fases 3 a 11, porque el 29 y el 30 están reservados
-para las slides y el vídeo. Hacen falta unas **2 fases al día**.
+A 24/11/2026, con las fases 0 a 3 cerradas, quedan **4 días de desarrollo** (25,
+26, 27 y 28) para las fases 4 a 11, porque el 29 y el 30 están reservados para
+las slides y el vídeo. Son **8 fases en 4 días: dos al día**, sin margen para un
+imprevisto.
 
-El riesgo **R8** sigue abierto y es el más serio del proyecto. Si al cerrar la
-Fase 4 no se ha recuperado margen, se **propondrán** recortes en el orden
-preacordado: 1) Husky, 2) tests E2E extra, 3) GitHub Actions avanzado, 4)
-borradores en localStorage. Nunca se recortan el cálculo del presupuesto, los
-tests de la lógica de negocio, el despliegue, el README, las slides ni el vídeo.
-Los recortes se proponen; no se aplican por iniciativa propia.
+Hay un dato nuevo que ayuda a calibrar: la Fase 3 —cinco ciclos TDD, 50 tests,
+un ADR y el registro— **se cerró en una sesión corta de la tarde del 24**, que
+no estaba en el cálculo de los 4 días. El ritmo real de una fase de lógica pura
+cabe de sobra en media jornada. Las que no se parecen a esta son la 8 (hay que
+descargar los navegadores de Playwright, riesgo R7) y la 9 (Husky y GitHub
+Actions, que tocan configuración y pueden pelearse con Windows).
+
+El riesgo **R8** sigue abierto y es el más serio del proyecto. Según lo
+acordado, si al cerrar la **Fase 4** no se ha recuperado margen se
+**propondrán** recortes en el orden preacordado: 1) Husky, 2) tests E2E extra, 3) GitHub Actions avanzado, 4) borradores en localStorage. Nunca se recortan el
+cálculo del presupuesto, los tests de la lógica de negocio, el despliegue, el
+README, las slides ni el vídeo. Los recortes se proponen; no se aplican por
+iniciativa propia.

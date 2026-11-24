@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { AMOUNT_DISCOUNT_THRESHOLD_CENTS } from '../constants/business-rules'
 import type { Service } from '../types/service'
 import { CATEGORIES, SERVICES } from './services'
 
@@ -97,16 +98,20 @@ describe('catálogo de servicios', () => {
     expect(formas).toEqual(new Set(['one-time', 'monthly', 'yearly']))
   })
 
-  it('permite superar los 3.000 € de pago único que exige el descuento por importe', () => {
+  it('permite superar el umbral de pago único que exige el descuento por importe', () => {
     const totalPagoUnico = SERVICES.filter(
       (servicio) => servicio.payment === 'one-time',
     ).reduce((suma, servicio) => suma + servicio.priceCents, 0)
 
     // El descuento por importe del apartado 4.3 se aplica cuando el pago único
-    // supera 3.000 €. Si una futura edición del catálogo bajara los precios,
+    // supera el umbral. Si una futura edición del catálogo bajara los precios,
     // ese descuento pasaría a ser inalcanzable y los tests de la Fase 6
     // fallarían sin que estuviera claro por qué. Este test lo señala aquí.
-    expect(totalPagoUnico).toBeGreaterThan(300_000)
+    //
+    // El umbral se lee de las constantes y no se escribe como literal: desde la
+    // Fase 3 el valor vive en un único archivo, así que subirlo a 5.000 € tiene
+    // que hacer fallar este test, no dejarlo comprobando una cifra antigua.
+    expect(totalPagoUnico).toBeGreaterThan(AMOUNT_DISCOUNT_THRESHOLD_CENTS)
   })
 
   it('no permite declarar meses mínimos en un servicio que no es mensual', () => {

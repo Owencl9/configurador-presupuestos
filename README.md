@@ -10,10 +10,12 @@ Trabajo Final de Máster — Máster en Desarrollo con Inteligencia Artificial
 
 **🔗 Aplicación en funcionamiento: https://configurador-presupuestos.vercel.app**
 
-> **Estado: en desarrollo (Fase 2 de 11 completada).** La aplicación ya está
+> **Estado: en desarrollo (Fase 3 de 11 completada).** La aplicación ya está
 > desplegada y se actualiza automáticamente con cada `push`. El catálogo de
-> servicios ya es el definitivo; el cálculo del presupuesto (subtotales,
-> descuentos, IGIC y total) llega en las fases 3 a 6.
+> servicios es el definitivo y **la aritmética del presupuesto ya está
+> implementada y probada**: subtotales separados por forma de pago, base
+> imponible e IGIC al 7 %, todo en céntimos enteros. Lo que falta es la interfaz
+> que la usa (Fase 4), el estado (Fase 5) y los descuentos (Fase 6).
 
 > ### ⚠️ Los precios son ficticios
 >
@@ -83,17 +85,20 @@ específico de cada funcionalidad en su propia carpeta.
 ├── public/                 Archivos servidos tal cual
 └── src/
     ├── features/           Código propio de cada funcionalidad
+    │   ├── budget/           Cálculo: subtotales, IGIC y orden de cálculo
     │   └── service-catalog/  Catálogo: agrupación por categorías y formato del precio
     ├── shared/             Código usado por varias funcionalidades
     │   ├── components/     Componentes reutilizables (ServiceCard)
+    │   ├── constants/      Reglas de negocio y sus valores (IGIC, descuentos)
     │   ├── data/           Catálogo de servicios (archivo de datos editable)
-    │   └── types/          Tipos de TypeScript del dominio
+    │   ├── types/          Tipos de TypeScript del dominio
+    │   └── utils/          Utilidades compartidas (formato de importes en euros)
     └── test/               Configuración común de los tests
 ```
 
 A medida que avancen las fases se añadirán más carpetas en `src/features/`
-(presupuesto, formulario de cliente, documento final), `src/context/` (estado
-global) y `e2e/` (tests de Playwright).
+(formulario de cliente, documento final), `src/context/` (estado global) y
+`e2e/` (tests de Playwright).
 
 Los tests viven junto al código que prueban: `ServiceCard.tsx` y
 `ServiceCard.test.tsx` están en la misma carpeta.
@@ -113,15 +118,35 @@ y Premium— son servicios independientes del catálogo, sin reglas de precio
 propias. Ver
 [ADR 0006](docs/adr/0006-niveles-como-servicios-independientes.md).
 
+### Las reglas de negocio
+
+Los valores viven en un **único archivo**,
+[`src/shared/constants/business-rules.ts`](src/shared/constants/business-rules.ts):
+el tipo de IGIC, los tres descuentos y el tope del 20 %. Cambiar el IGIC es
+cambiar un número en ese archivo, y no hay ningún otro sitio que haya que tocar.
+
+El orden de cálculo es **subtotal → descuentos → base imponible → IGIC →
+total**, y se aplica por separado a cada forma de pago. El presupuesto no tiene
+un total único: tiene tres, porque un pago inicial, una cuota mensual y una
+cuota anual se pagan en momentos distintos y sumarlos daría un importe que el
+cliente no paga nunca.
+
+Todo el dinero se calcula con **enteros en céntimos**
+([ADR 0003](docs/adr/0003-dinero-en-centimos.md)) y solo se convierte a euros al
+mostrarlo. El IGIC se redondea al céntimo más cercano, una sola vez por bloque
+de pago y después de los descuentos
+([ADR 0007](docs/adr/0007-redondeo-del-igic.md)).
+
 ## Funcionalidades
 
 - ✅ Catálogo de servicios agrupados por categoría, con pago único, mensual o anual
+- ✅ Cálculo del presupuesto: subtotales por forma de pago, base imponible e IGIC
 
 ### Previstas
 
 - Construcción del presupuesto con cantidades y permanencias mínimas
 - Descuentos por pack, permanencia e importe, con tope máximo del 20 %
-- Cálculo del IGIC y desglose de pago inicial, cuota mensual y pagos anuales
+- Desglose en pantalla del pago inicial, la cuota mensual y los pagos anuales
 - Datos del cliente, número de presupuesto y validez
 - Vista imprimible del presupuesto, para guardar como PDF desde el navegador
 - Borradores guardados en el navegador
@@ -153,7 +178,8 @@ cabecera que puede dejar la página en blanco si se escribe mal.
 ## Metodología
 
 - **TDD** en toda la lógica de negocio: primero el test, se comprueba que falla,
-  después la implementación mínima y por último la refactorización.
+  después la implementación mínima y por último la refactorización. **87 tests
+  en verde** al cerrar la Fase 3.
 - **Dinero en céntimos**: todos los cálculos internos usan enteros, para evitar
   los errores de redondeo de los decimales. Ver
   [ADR 0003](docs/adr/0003-dinero-en-centimos.md).
