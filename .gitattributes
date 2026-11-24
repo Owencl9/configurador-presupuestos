@@ -1,0 +1,30 @@
+# Finales de línea fijados en el repositorio, no en la configuración de cada
+# máquina (tarea F1-a del apartado 4.bis del inventario de la Fase 0).
+#
+# `text=auto eol=lf` hace que Git normalice a LF al guardar y entregue LF al
+# clonar, con independencia de lo que tenga configurado `core.autocrlf` en el
+# equipo de quien clone el repositorio.
+* text=auto eol=lf
+
+# Archivos binarios: Git no debe tocar sus bytes ni intentar compararlos.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.mp4 binary
+*.webm binary
+*.zip binary
+
+# Los SVG son texto, aunque sean imágenes.
+*.svg text eol=lf
+
+# Generado por npm: se versiona, pero su diff no aporta nada al revisar.
+package-lock.json -diff linguist-generated=true

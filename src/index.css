@@ -1,0 +1,11 @@
+/* Tailwind CSS v4 se configura desde el propio CSS, no con tailwind.config.js.
+   Esta línea importa el reset, las utilidades y las variables de tema. */
+@import 'tailwindcss';
+
+/* Tipografía base del proyecto. Se declara aquí, en la capa `base`, para que
+   cualquier utilidad de Tailwind pueda sobreescribirla sin usar !important. */
+@layer base {
+  html {
+    font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  }
+}

@@ -1,0 +1,13 @@
+# Generado por herramientas: no se formatea.
+dist
+coverage
+node_modules
+package-lock.json
+
+# Informes de Playwright (Fase 8).
+playwright-report
+test-results
+
+# Documentación del TFM: son documentos escritos a mano, no código. Prettier
+# realinearía todas sus tablas y haría ilegible el diff de cada fase.
+docs

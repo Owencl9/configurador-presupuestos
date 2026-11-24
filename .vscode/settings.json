@@ -1,0 +1,23 @@
+{
+  // Tarea F1-c del inventario de la Fase 0: los archivos nuevos se crean con
+  // LF, igual que los guarda Git (.gitattributes) y Prettier (.prettierrc.json).
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+
+  // Usa el TypeScript del proyecto (6.0.3) y no el que trae VS Code, para que
+  // el editor y `npm run build` informen exactamente de los mismos errores.
+  "typescript.tsdk": "node_modules/typescript/lib",
+
+  // En Markdown los dos espacios al final de línea son un salto de línea
+  // intencionado: ahí no se recortan.
+  "[markdown]": {
+    "files.trimTrailingWhitespace": false
+  }
+}
