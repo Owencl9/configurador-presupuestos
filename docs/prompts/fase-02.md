@@ -161,6 +161,14 @@ Hubo que ejecutarla tres veces, y las dos primeras no valían: el primer barrido
 | **Control positivo** de la búsqueda de correos | 8 coincidencias en el repositorio completo, todas la dirección `noreply` |
 | Archivos ignorados que no entran              | `.claude/`, `dist/`, `node_modules/` y el PDF interno del máster          |
 
+### Publicación y verificación en producción
+
+Commit `8814d83`, 16 archivos, 1.518 líneas añadidas. `push` a `main` verificado comparando el SHA local con el de `origin/main`. Vercel redesplegó automáticamente.
+
+Sobre la URL de producción: los **12 servicios** presentes en el JS publicado, las 4 categorías, los sufijos `/mes` y `/año`, las **4 cabeceras de seguridad** más HSTS, y los sourcemaps y el código fuente en HTTP 404. El JS y el CSS publicados pesan **exactamente lo mismo** que el build local (224.737 y 11.399 bytes), lo que descarta que Vercel haya compilado algo distinto.
+
+**Negativo falso al comprobar los precios:** la búsqueda literal de cinco de los seis importes probados no los encontró en el JS publicado. No faltaban: esbuild minifica los literales numéricos a su forma más corta, y `250000` se publica como `25e4`. Solo `7200` aparece tal cual, porque no tiene forma más breve. Es la tercera vez en esta fase que un «no encontrado» resulta no significar lo que parecía —las otras dos son **P9** y el control positivo—, y las tres veces lo resolvió lo mismo: comprobar la herramienta antes de creerse el resultado.
+
 Datos de terceros: ninguno. El registro describe el ignore global de Git como «el del perfil del usuario», sin reproducir la ruta, y no menciona nombres, correos ni dominios de nadie.
 
 ---

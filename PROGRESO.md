@@ -1,8 +1,9 @@
 # Estado del desarrollo
 
 **Última actualización:** 24/11/2026
-**Fase actual:** Fase 2 completada. A la espera de autorización para la Fase 3,
-que empieza confirmando las reglas de negocio, los precios y el tipo de IGIC.
+**Fase actual:** Fase 2 completada, publicada (`8814d83`) y **verificada en
+producción**. La Fase 3 empieza confirmando las reglas de negocio, los precios y
+el tipo de IGIC, y se abordará en una conversación nueva.
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**privado** hasta la Fase 10)
 **Aplicación desplegada:** https://configurador-presupuestos.vercel.app
@@ -301,6 +302,32 @@ un espacio irrompible (U+00A0), no con un espacio normal.
 
 No se ha instalado ninguna dependencia nueva, así que `npm audit` no cambia
 respecto a la Fase 1.
+
+### Verificación en producción (commit `8814d83`)
+
+Hecha el 24/11/2026 sobre https://configurador-presupuestos.vercel.app, después
+del `push`.
+
+| Comprobación                                       | Resultado                                                                                         |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `index.html`                                       | HTTP 200, y referencia los **mismos nombres de recurso** que el build local                       |
+| JS publicado                                       | `index-DvjE03d8.js`, **224.737 bytes, idéntico byte a byte en tamaño al build local**             |
+| CSS publicado                                      | `index-BJNF-ZiX.css`, **11.399 bytes, igual que el local**                                        |
+| Los 12 servicios del catálogo                      | **12 de 12** presentes en el JS publicado                                                         |
+| Las 4 categorías y los sufijos `/mes`, `/año`      | presentes                                                                                         |
+| Los 12 precios en céntimos                         | presentes, pero **en notación exponencial**: esbuild escribe `250000` como `25e4` (ver más abajo) |
+| Cabeceras de seguridad                             | **4 de 4** correctas, más `Strict-Transport-Security`                                             |
+| Sourcemaps (`.js.map`, `.css.map`)                 | HTTP 404: el código fuente no queda expuesto                                                      |
+| `src/shared/data/services.ts`, `CLAUDE.md`, `.env` | HTTP 404: no se publica nada del repositorio                                                      |
+
+**Detalle que estuvo a punto de parecer un fallo:** la búsqueda de los precios
+en el JS publicado devolvió «no encontrado» para cinco de los seis importes
+probados. No faltaban: el minificador de esbuild reescribe los literales
+numéricos en la forma más corta, y `250000` se publica como `25e4`, `120000`
+como `12e4` y `6000` como `6e3`. Solo `7200` aparece tal cual, porque no tiene
+forma más breve. Comprobado uno por uno. Es un recordatorio de que **lo que se
+publica no es el código que se escribió**, y de que una búsqueda literal sobre
+un archivo minificado puede dar un negativo falso.
 
 ---
 
