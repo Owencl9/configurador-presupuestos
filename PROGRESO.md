@@ -455,24 +455,65 @@ ningún estilo. Es el problema **P7** de la Fase 2, ya diagnosticado: Tailwind
 extrae candidatos a clase del texto de los archivos `.ts`. Está decidido que no
 se corrige (corrección C2-4). Se anota y no se investiga.
 
+### Verificación en producción (commit `727167e`)
+
+Hecha el 24/11/2026 sobre https://configurador-presupuestos.vercel.app, después
+del `push`. El SHA remoto se consultó al servidor con `git ls-remote`, no al
+caché local de `origin/main`.
+
+| Comprobación                                      | Resultado                                                                   |
+| ------------------------------------------------- | --------------------------------------------------------------------------- |
+| `index.html`                                      | HTTP 200, y referencia los **mismos nombres de recurso** que el build local |
+| JS publicado                                      | `index-BjT9od3w.js`, **224.881 bytes, igual que el build local**            |
+| CSS publicado                                     | `index-DPgWZJU5.css`, **11.428 bytes, igual que el local**                  |
+| Cabeceras de seguridad                            | **4 de 4** correctas, más `Strict-Transport-Security`                       |
+| Sourcemaps (`.js.map`)                            | HTTP 404                                                                    |
+| Código fuente nuevo, `docs/`, `CLAUDE.md`, `.env` | HTTP 404: no se publica nada del repositorio                                |
+
+**El cálculo de la Fase 3 todavía no está en el JS publicado, y es correcto que
+no esté.** Ningún componente importa `calculateBudget`, `calculateIgic` ni
+`calculateSubtotals`, así que Vite los descarta del paquete (_tree shaking_). Lo
+que sí está es `formatEuros`, porque lo usa el catálogo. Comprobado con dos
+marcadores que sobreviven a la minificación —los mensajes de error, que son
+cadenas literales—:
+
+| Marcador                                 | En producción                |
+| ---------------------------------------- | ---------------------------- |
+| Mensaje de error de `formatEuros`        | **presente**                 |
+| Expresión del separador de millares      | **presente**                 |
+| Mensaje de error de `calculateSubtotals` | **ausente**, como debe estar |
+
+La pareja es el control positivo de la propia comprobación: la misma búsqueda,
+sobre el mismo archivo, encuentra lo que tiene que estar y no encuentra lo que
+no. Un «no encontrado» aislado no habría distinguido entre «no está publicado» y
+«la búsqueda no funciona», que es el error del problema **P9** de la Fase 2. El
+cálculo entra en el paquete publicado en la **Fase 4**, cuando los componentes
+lo usen, y ahí es donde hay que volver a comprobarlo.
+
+**Confirmación de que el arreglo de Tailwind de la Fase 1 sigue en pie:** este
+commit añade cinco documentos (`.md`) y el CSS publicado tiene el mismo nombre y
+el mismo tamaño que el build local hecho antes de escribirlos. La documentación
+ya no entra en el CSS.
+
 ---
 
 ## Pendiente y vigilado
 
-| #   | Asunto                                                                                                                                  | Cuándo    |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos                                                                   | Fase 10   |
-| 2   | El favicon sigue siendo el de Vite                                                                                                      | Fase 11   |
-| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                                                                      | Fase 9    |
-| 4   | ~~Confirmar con el usuario los precios, el IGIC y las reglas de descuento~~ **resuelto en la Fase 3**                                   | —         |
-| 5   | ~~El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx`~~ **resuelto en la Fase 2**                     | —         |
-| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto                                                    | —         |
-| 7   | ~~Sustituir la conversión provisional de céntimos a euros de `buildPriceLabel` por el `formatEuros` probado~~ **resuelto en la Fase 3** | —         |
-| 8   | El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto                                           | Fase 4    |
-| 9   | **Los meses de contratación no están en `BudgetLine`.** Entran con su selector, que es donde se usan                                    | Fase 4    |
-| 10  | **Decidir si el resumen muestra «lo que se paga hoy»** (pago inicial + primera cuota). Es presentación, no cálculo                      | Fase 4    |
-| 11  | **A qué subtotal se aplica el descuento por pack**: a los tres bloques o solo a alguno. La regla dice «el subtotal» y hay tres          | Fase 6    |
-| 12  | `calculateBudget` es el único punto de entrada del cálculo: los componentes no deben hacer cuentas por su cuenta                        | Fases 4-7 |
+| #   | Asunto                                                                                                                                                                                                                                                                                                                                                       | Cuándo                 |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------- |
+| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos                                                                                                                                                                                                                                                                                        | Fase 10                |
+| 2   | El favicon sigue siendo el de Vite                                                                                                                                                                                                                                                                                                                           | Fase 11                |
+| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                                                                                                                                                                                                                                                                                           | Fase 9                 |
+| 4   | ~~Confirmar con el usuario los precios, el IGIC y las reglas de descuento~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                        | —                      |
+| 5   | ~~El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx`~~ **resuelto en la Fase 2**                                                                                                                                                                                                                                          | —                      |
+| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto                                                                                                                                                                                                                                                                         | —                      |
+| 7   | ~~Sustituir la conversión provisional de céntimos a euros de `buildPriceLabel` por el `formatEuros` probado~~ **resuelto en la Fase 3**                                                                                                                                                                                                                      | —                      |
+| 8   | El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto                                                                                                                                                                                                                                                                | Fase 4                 |
+| 9   | **Los meses de contratación no están en `BudgetLine`.** Entran con su selector, que es donde se usan                                                                                                                                                                                                                                                         | Fase 4                 |
+| 10  | **Decidir si el resumen muestra «lo que se paga hoy»** (pago inicial + primera cuota). Es presentación, no cálculo                                                                                                                                                                                                                                           | Fase 4                 |
+| 11  | **A qué subtotal se aplica el descuento por pack**: a los tres bloques o solo a alguno. La regla dice «el subtotal» y hay tres                                                                                                                                                                                                                               | Fase 6                 |
+| 12  | `calculateBudget` es el único punto de entrada del cálculo: los componentes no deben hacer cuentas por su cuenta                                                                                                                                                                                                                                             | Fases 4-7              |
+| 13  | **Añadir al apartado 1 de `CLAUDE.md` la norma de ritmo de la corrección C3-1**, autorizado por el usuario el 24/11/2026: comprobar lo que afecta al resultado o a la seguridad, y preguntar antes de lanzar investigaciones que no cambien ninguna decisión. Va al repositorio para que viaje con un clonado, igual que los finales de línea del apartado 4 | **Al abrir la Fase 4** |
 
 ### Riesgos abiertos (del inventario de la Fase 0)
 
