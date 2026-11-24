@@ -71,7 +71,9 @@ Recogido en el apartado 9 (subapartados 9.1 a 9.7) del inventario.
 
 ### Prompt 5 — Contenido del PDF de requisitos
 
-Ante el fallo de extracción del PDF (ver el problema P1), el usuario pegó directamente en el chat el texto de los requisitos oficiales del TFM: documentación en README, repositorio público en GitHub, despliegue en funcionamiento con URL, slides de presentación, vídeo con grabación de pantalla, y entrega mediante el formulario de la lección «Proyecto Final».
+Ante el fallo de extracción del PDF (ver el problema P1), el usuario pegó directamente en el chat el texto de los requisitos oficiales del TFM: documentación en README, repositorio público en GitHub, despliegue en funcionamiento con URL, slides de presentación, vídeo con grabación de pantalla, y la entrega por el procedimiento que indica el propio documento oficial.
+
+**Nota añadida en la Fase 5:** esta línea citaba antes, por su nombre, el procedimiento interno de entrega de la plataforma del máster. Se ha sustituido por una referencia genérica, por decisión del usuario: describe el funcionamiento de un curso ajeno, el repositorio será público en la Fase 10 y el dato no aporta nada al registro. Es la misma norma del apartado 5 de `CLAUDE.md` que ya actuó en la corrección **C1-7**: se describe el dato en lugar de reproducirlo.
 
 ---
 
@@ -124,7 +126,7 @@ Sobre la última verificación: releer la configuración con `git config --list`
 
 ### P1 — No se pudo leer el PDF de requisitos del máster
 
-*(`docs/documento-proyecto-final.pdf`, documento interno no versionado.)*
+*(Documento interno no versionado. Desde la Fase 5 vive en `docs/privado/`, una carpeta ignorada por completo en el `.gitignore`.)*
 
 **Síntoma:** la lectura del PDF falló con `pdftoppm is not installed` (falta `poppler-utils`, que no viene en Windows).
 
@@ -174,7 +176,7 @@ Sobre la última verificación: releer la configuración con `git config --list`
 
 | Decisión | Motivo |
 |---|---|
-| Mantener la carpeta `C:\Users\Owen\Desktop\Proyecto Final\configurador-presupuestos` | Fuera de OneDrive, ya contiene `docs/`, y el espacio en el nombre no causa problemas reales |
+| Mantener la carpeta `%USERPROFILE%\Desktop\Proyecto Final\configurador-presupuestos` | Fuera de OneDrive, ya contiene `docs/`, y el espacio en el nombre no causa problemas reales |
 | No activar `LongPathsEnabled` en el registro de Windows | Requiere administrador y reinicio; la ruta es corta y `core.longpaths` de Git cubre el caso |
 | Crear la cuenta de GitHub en la Fase 0 y no en la Fase 10 | El correo del primer commit queda público y permanente; conviene disponer antes del correo `@users.noreply.github.com` |
 | Usar el correo `@users.noreply.github.com` como `user.email` | Decisión del usuario. Evita publicar su dirección real en el historial de un repositorio público (riesgo R2) |

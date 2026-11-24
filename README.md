@@ -10,14 +10,14 @@ Trabajo Final de Máster — Máster en Desarrollo con Inteligencia Artificial
 
 **🔗 Aplicación en funcionamiento: https://configurador-presupuestos.vercel.app**
 
-> **Estado: en desarrollo (Fase 4 de 11 completada).** La aplicación ya está
+> **Estado: en desarrollo (Fase 5 de 11 completada).** La aplicación ya está
 > desplegada y se actualiza automáticamente con cada `push`. **El presupuesto
 > funciona de principio a fin**: se añaden servicios del catálogo, se eligen la
 > cantidad y los meses respetando los mínimos de cada servicio, y el resumen se
 > actualiza al instante con el pago inicial, la cuota mensual y el pago anual,
-> cada uno con su base imponible, su IGIC al 7 % y su total. Lo que falta son
-> los borradores guardados (Fase 5), los descuentos (Fase 6) y el documento
-> imprimible para el cliente (Fase 7).
+> cada uno con su base imponible, su IGIC al 7 % y su total. **El presupuesto en
+> curso se guarda en el navegador** y sigue ahí al volver. Lo que falta son los
+> descuentos (Fase 6) y el documento imprimible para el cliente (Fase 7).
 
 > ### ⚠️ Los precios son ficticios
 >
@@ -86,21 +86,21 @@ específico de cada funcionalidad en su propia carpeta.
 │   └── prompts/            Registro de prompts por fase (evidencia de desarrollo con IA)
 ├── public/                 Archivos servidos tal cual
 └── src/
+    ├── context/            Estado global del presupuesto (Context + useReducer)
     ├── features/           Código propio de cada funcionalidad
-    │   ├── budget/           Presupuesto: cálculo, líneas, resumen y panel
+    │   ├── budget/           Presupuesto: cálculo, líneas, resumen, panel y borradores
     │   └── service-catalog/  Catálogo: agrupación por categorías y formato del precio
     ├── shared/             Código usado por varias funcionalidades
     │   ├── components/     Componentes reutilizables (ServiceCard, QuantitySelector)
     │   ├── constants/      Reglas de negocio y sus valores (IGIC, descuentos, límites)
     │   ├── data/           Catálogo de servicios (archivo de datos editable)
     │   ├── types/          Tipos de TypeScript del dominio
-    │   └── utils/          Utilidades compartidas (formato de importes, normalización)
+    │   └── utils/          Utilidades compartidas (importes, normalización, localStorage)
     └── test/               Configuración común de los tests
 ```
 
 A medida que avancen las fases se añadirán más carpetas en `src/features/`
-(formulario de cliente, documento final), `src/context/` (estado global) y
-`e2e/` (tests de Playwright).
+(formulario de cliente, documento final) y `e2e/` (tests de Playwright).
 
 Los tests viven junto al código que prueban: `ServiceCard.tsx` y
 `ServiceCard.test.tsx` están en la misma carpeta.
@@ -148,6 +148,30 @@ mostrarlo. El IGIC se redondea al céntimo más cercano, una sola vez por bloque
 de pago y después de los descuentos
 ([ADR 0007](docs/adr/0007-redondeo-del-igic.md)).
 
+### El borrador guardado en el navegador
+
+El presupuesto en curso se guarda en `localStorage` y se recupera al volver, sin
+servidor y sin cuentas de usuario. **Lo guardado es deliberadamente mínimo:** el
+identificador de cada servicio, la cantidad y los meses. Ni precios, ni nombres,
+ni importes, ni ningún dato personal.
+
+```json
+{ "lines": [{ "serviceId": "seo-basic", "quantity": 1, "months": 12 }] }
+```
+
+Al recuperarlo, cada identificador se busca en el catálogo y de ahí salen el
+precio, el nombre y la forma de pago. La consecuencia práctica es que **editar
+el almacenamiento del navegador no puede cambiar un importe**: como mucho puede
+cambiar qué servicios figuran, que es lo mismo que se puede hacer pulsando
+botones.
+
+Todo lo que se lee se trata como no fiable y se valida: un JSON roto o un
+formato desconocido se descartan, una línea de un servicio que ya no existe en
+el catálogo se descarta sola y los números fuera de rango se corrigen. Si el
+navegador no permite guardar —cookies bloqueadas, cuota agotada— la aplicación
+funciona igual, simplemente sin borradores. Razonado en el
+[ADR 0009](docs/adr/0009-borradores-en-localstorage.md).
+
 ## Funcionalidades
 
 - ✅ Catálogo de servicios agrupados por categoría, con pago único, mensual o anual
@@ -158,13 +182,15 @@ de pago y después de los descuentos
   uno con su base imponible, su IGIC y su total
 - ✅ Línea informativa de lo que se paga el primer día
   ([ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md))
+- ✅ Borrador guardado en el navegador, validado al recuperarlo, y botón para
+  empezar de nuevo con confirmación
+  ([ADR 0009](docs/adr/0009-borradores-en-localstorage.md))
 
 ### Previstas
 
 - Descuentos por pack, permanencia e importe, con tope máximo del 20 %
 - Datos del cliente, número de presupuesto y validez
 - Vista imprimible del presupuesto, para guardar como PDF desde el navegador
-- Borradores guardados en el navegador
 
 ## Despliegue
 
@@ -193,8 +219,11 @@ cabecera que puede dejar la página en blanco si se escribe mal.
 ## Metodología
 
 - **TDD** en toda la lógica de negocio: primero el test, se comprueba que falla,
-  después la implementación mínima y por último la refactorización. **190 tests
-  en verde** al cerrar la Fase 4.
+  después la implementación mínima y por último la refactorización. **300 tests
+  en verde** al cerrar la Fase 5.
+- **Los datos que no son de fiar se validan en la frontera**: lo que llega de
+  `localStorage` pasa por una función pura que lo comprueba antes de que ningún
+  componente lo vea. Las funciones que tocan el navegador no pueden lanzar.
 - **Accesibilidad** desde el primer componente: todo operable con teclado,
   encabezados sin saltos, regiones con nombre, y ninguna información
   transmitida solo con el color. Los tests consultan por rol y por nombre

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
 import App from './App'
+import { DRAFT_STORAGE_KEY } from './features/budget/draftFormat'
 
 /*
  * Test de integración de la Fase 4: el catálogo, el presupuesto y el cálculo
@@ -218,5 +219,203 @@ describe('App', () => {
     expect(
       screen.getByRole('heading', { level: 2, name: 'Tu presupuesto' }),
     ).toBeInTheDocument()
+  })
+})
+
+/*
+ * Tests de integración de la Fase 5: el estado global y los borradores, con la
+ * aplicación entera y el catálogo real.
+ *
+ * Lo que prueban y no puede probar ningún test anterior es el viaje completo:
+ * que lo que se pulsa en pantalla acaba en `localStorage`, y que lo que hay en
+ * `localStorage` acaba en pantalla con los importes del catálogo.
+ *
+ * Desmontar la aplicación y volver a montarla es lo más parecido a recargar la
+ * página que se puede hacer en un test: el navegador simulado y su
+ * `localStorage` siguen ahí, igual que al pulsar F5, y la aplicación arranca
+ * desde cero. El `localStorage` se vacía antes de cada test en
+ * `src/test/setup.ts`.
+ */
+describe('App — el borrador del presupuesto', () => {
+  const pedirWeb = (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(
+      screen.getByRole('button', {
+        name: 'Añadir Web corporativa al presupuesto',
+      }),
+    )
+
+  /** Un borrador escrito a mano, como el que puede haber en un navegador. */
+  function guardarBorrador(lines: readonly Record<string, unknown>[]) {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ lines }))
+  }
+
+  it('el presupuesto sigue ahí al volver a abrir la aplicación', async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<App />)
+
+    await pedirWeb(user)
+    await user.click(
+      screen.getByRole('button', { name: 'Añadir SEO Básico al presupuesto' }),
+    )
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Aumentar Cantidad de Web corporativa',
+      }),
+    )
+
+    unmount()
+    render(<App />)
+
+    expect(within(panel()).getByText('Web corporativa')).toBeInTheDocument()
+    expect(within(panel()).getByText('SEO Básico')).toBeInTheDocument()
+    expect(
+      screen.getByRole('spinbutton', { name: 'Cantidad de Web corporativa' }),
+    ).toHaveValue(2)
+
+    // Y el catálogo aparece marcado, porque lo marcado se deriva de las líneas.
+    expect(
+      within(catalogoWeb()).getByRole('button', {
+        name: 'Quitar Web corporativa del presupuesto',
+        pressed: true,
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('no se pierde el borrador en el primer render', () => {
+    // El riesgo que pidió cubrir el usuario, aquí visto desde la aplicación
+    // entera: el borrador se lee al crear el estado, así que no hay ningún
+    // instante en que el presupuesto esté vacío y se guarde encima.
+    guardarBorrador([{ serviceId: 'corporate-website', quantity: 1 }])
+    const guardadoAntes = localStorage.getItem(DRAFT_STORAGE_KEY)
+
+    render(<App />)
+
+    expect(localStorage.getItem(DRAFT_STORAGE_KEY)).toBe(guardadoAntes)
+    expect(within(panel()).getByText('Web corporativa')).toBeInTheDocument()
+  })
+
+  it('un precio escrito a mano en el borrador no cambia ningún importe', () => {
+    /*
+     * El motivo por el que el borrador guarda solo identificadores. Alguien
+     * edita el almacenamiento del navegador y afirma que la web corporativa
+     * cuesta un céntimo: la aplicación la cobra a 1.200,00 € + IGIC, porque el
+     * precio sale del catálogo y lo guardado no se mira para eso.
+     */
+    guardarBorrador([
+      { serviceId: 'corporate-website', quantity: 1, priceCents: 1 },
+    ])
+
+    render(<App />)
+
+    expect(
+      screen.getByText(
+        '1 servicio en el presupuesto. A pagar el primer día (orientativo): 1.284,00 €',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('descarta la línea de un servicio que no existe y conserva el resto', () => {
+    guardarBorrador([
+      { serviceId: 'servicio-que-ya-no-existe', quantity: 1 },
+      { serviceId: 'corporate-website', quantity: 1 },
+    ])
+
+    render(<App />)
+
+    expect(
+      screen.getByText(
+        '1 servicio en el presupuesto. A pagar el primer día (orientativo): 1.284,00 €',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('corrige los números imposibles de un borrador editado a mano', () => {
+    // 500 meses y 10.000 unidades: se acercan al rango por el lado por el que
+    // se han salido (36 meses y 99 unidades), no se descarta la línea.
+    guardarBorrador([{ serviceId: 'seo-basic', quantity: 10_000, months: 500 }])
+
+    render(<App />)
+
+    expect(
+      screen.getByRole('spinbutton', { name: 'Cantidad de SEO Básico' }),
+    ).toHaveValue(99)
+    expect(
+      screen.getByRole('spinbutton', { name: 'Meses de SEO Básico' }),
+    ).toHaveValue(36)
+  })
+
+  it('arranca vacío y sin romperse si el borrador está dañado', () => {
+    localStorage.setItem(DRAFT_STORAGE_KEY, '{"lines":[{"serviceId":')
+
+    expect(() => render(<App />)).not.toThrow()
+    expect(
+      screen.getByText(/Todavía no has añadido ningún servicio/),
+    ).toBeInTheDocument()
+  })
+
+  describe('empezar de nuevo', () => {
+    it('no ofrece el botón con el presupuesto vacío', () => {
+      render(<App />)
+
+      expect(
+        screen.queryByRole('button', { name: 'Empezar de nuevo' }),
+      ).not.toBeInTheDocument()
+    })
+
+    it('cancelar deja el presupuesto como estaba', async () => {
+      const user = userEvent.setup()
+      render(<App />)
+
+      await pedirWeb(user)
+      await user.click(screen.getByRole('button', { name: 'Empezar de nuevo' }))
+      await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+      expect(within(panel()).getByText('Web corporativa')).toBeInTheDocument()
+      expect(localStorage.getItem(DRAFT_STORAGE_KEY)).not.toBeNull()
+    })
+
+    it('confirmar vacía el presupuesto y borra el borrador guardado', async () => {
+      const user = userEvent.setup()
+      render(<App />)
+
+      await pedirWeb(user)
+      await user.click(screen.getByRole('button', { name: 'Empezar de nuevo' }))
+      await user.click(
+        screen.getByRole('button', { name: 'Sí, borrar el presupuesto' }),
+      )
+
+      expect(
+        screen.getByText(/Todavía no has añadido ningún servicio/),
+      ).toBeInTheDocument()
+      expect(
+        within(catalogoWeb()).getByRole('button', {
+          name: 'Añadir Web corporativa al presupuesto',
+          pressed: false,
+        }),
+      ).toBeInTheDocument()
+      expect(localStorage.getItem(DRAFT_STORAGE_KEY)).toBeNull()
+
+      // Y el foco acaba en el mensaje de que se ha borrado, porque el botón
+      // que se acaba de pulsar ya no existe.
+      expect(screen.getByText(/Se ha borrado el presupuesto/)).toHaveFocus()
+    })
+
+    it('lo borrado no vuelve al recargar', async () => {
+      const user = userEvent.setup()
+      const { unmount } = render(<App />)
+
+      await pedirWeb(user)
+      await user.click(screen.getByRole('button', { name: 'Empezar de nuevo' }))
+      await user.click(
+        screen.getByRole('button', { name: 'Sí, borrar el presupuesto' }),
+      )
+
+      unmount()
+      render(<App />)
+
+      expect(
+        screen.getByText(/Todavía no has añadido ningún servicio/),
+      ).toBeInTheDocument()
+    })
   })
 })

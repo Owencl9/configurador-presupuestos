@@ -1,11 +1,12 @@
 # Estado del desarrollo
 
 **Última actualización:** 24/11/2026
-**Fase actual:** **Fase 4 completada**. El presupuesto funciona de punta a
-punta en el navegador: añadir servicios, elegir cantidad y meses con sus
-mínimos, y el resumen con los tres bloques de pago, su IGIC y su total. 190
-tests en verde. Probado en el navegador por el usuario en local y en
-producción, y **verificado en producción** (commit `259552a`).
+**Fase actual:** **Fase 5 completada**. El estado del presupuesto vive en un
+Context con `useReducer`, y el presupuesto en curso se guarda como borrador en
+`localStorage`: sobrevive a recargar la página, no guarda ni precios ni nombres
+ni datos personales, y valida todo lo que lee. 300 tests en verde. Probado en el
+navegador por el usuario, en pantalla ancha y en móvil. **Pendiente de verificar
+en producción** tras el `push`.
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**privado** hasta la Fase 10)
 **Aplicación desplegada:** https://configurador-presupuestos.vercel.app
@@ -24,7 +25,7 @@ producción, y **verificado en producción** (commit `259552a`).
 | 2    | Tipos de TypeScript y catálogo de servicios                                  | ✅ cerrada 24/11/2026 |
 | 3    | Lógica de negocio con TDD: formato de euros, subtotales, IGIC                | ✅ cerrada 24/11/2026 |
 | 4    | Componentes del presupuesto con TDD                                          | ✅ cerrada 24/11/2026 |
-| 5    | Estado con Context + useReducer y borradores en localStorage                 | pendiente             |
+| 5    | Estado con Context + useReducer y borradores en localStorage                 | ✅ cerrada 24/11/2026 |
 | 6    | Descuentos con patrón Strategy                                               | pendiente             |
 | 7    | Formulario de cliente y documento imprimible                                 | pendiente             |
 | 8    | Tests E2E con Playwright                                                     | pendiente             |
@@ -711,24 +712,281 @@ paquete que recibe el navegador, que es exactamente lo que predijo aquella nota.
 
 ---
 
+## Completado en la Fase 5
+
+### El estado, fuera de `App.tsx`
+
+El `useState` de la Fase 4 y sus cuatro funciones pasan a un **reducer**, que es
+una función pura y por tanto se prueba como cualquier función de cálculo: se le
+pasa un estado y una acción, y se compara el objeto que devuelve. Sin navegador
+y sin componentes.
+
+| Archivo                      | Qué hace                                     | Tests |
+| ---------------------------- | -------------------------------------------- | ----- |
+| `context/budgetReducer.ts`   | El estado y las cinco acciones. Función pura | 19    |
+| `context/BudgetContext.ts`   | El Context y el hook `useBudget`             | —     |
+| `context/BudgetProvider.tsx` | Guarda el estado, lee y escribe el borrador  | 16    |
+| `Configurator.tsx`           | El contenido que antes estaba en `App`       | —     |
+| `App.tsx`                    | El proveedor y la pantalla, en cuatro líneas | 18    |
+
+**Ningún componente de presentación ha cambiado.** `ServiceCatalog`,
+`BudgetPanel`, `BudgetLineItem`, `QuantitySelector` y `ServiceCard` reciben las
+mismas props que en la Fase 4 y no conocen el Context: `Configurator` es el
+único que llama a `useBudget`, y lo que hace con lo que recibe es repartirlo.
+Los **190 tests de las fases 1 a 4 siguen en verde y ninguno se ha modificado**.
+
+Tres decisiones del estado:
+
+- **El estado son las líneas**, y los identificadores marcados del catálogo se
+  derivan de ellas. No hay dos listas que puedan discrepar.
+- **La acción de añadir lleva el servicio entero**, no su identificador, así que
+  el reducer no conoce el catálogo y se prueba con dos servicios inventados. La
+  traducción de identificador a servicio ocurre en un solo sitio, el proveedor.
+- **El proveedor está dentro de `App`**, no en `main.tsx`. Así `<App />` es la
+  aplicación completa y los ocho tests de integración de la Fase 4 siguen
+  funcionando sin envolverlos en nada.
+
+### Los borradores en `localStorage`
+
+| Archivo                             | Qué hace                                            | Tests |
+| ----------------------------------- | --------------------------------------------------- | ----- |
+| `features/budget/draftFormat.ts`    | La clave versionada y la forma de lo que se guarda  | —     |
+| `features/budget/serializeDraft.ts` | Líneas → borrador. Función pura                     | 7     |
+| `features/budget/parseDraft.ts`     | `unknown` + catálogo → líneas válidas. Función pura | 23    |
+| `shared/utils/safeLocalStorage.ts`  | Leer, escribir y borrar sin poder lanzar            | 8     |
+| `features/budget/draftStorage.ts`   | Junta las tres anteriores con el navegador          | 14    |
+
+**Qué se guarda, bajo la clave `configurador-presupuestos:budget-draft:v1`:**
+
+```json
+{ "lines": [{ "serviceId": "seo-basic", "quantity": 1, "months": 12 }] }
+```
+
+Tres campos y ninguno más. **Ni precios, ni nombres, ni importes, ni IGIC, ni
+totales, ni un solo dato personal.** Al recuperar el borrador, el servicio se
+busca por identificador en el catálogo y la línea guarda **ese** objeto, así que
+editar el almacenamiento del navegador no puede cambiar un precio: como mucho
+puede cambiar qué servicios figuran, que es lo mismo que puede hacer cualquiera
+pulsando botones. Hay un test que lo comprueba con `toBe`, que compara
+identidad, y otro que inyecta un `priceCents: 1` en el borrador y verifica que
+en pantalla siguen saliendo 1.200,00 € + IGIC. Razonado en el
+[ADR 0009](docs/adr/0009-borradores-en-localstorage.md).
+
+La versión va **en la clave**: si el formato cambia en una fase posterior, pasa
+a `:v2` y los borradores antiguos quedan ignorados sin llegar a leerse, que es
+la forma más segura de tratar un formato desconocido.
+
+### Las tres formas de tratar un dato que no es de fiar
+
+Decisión del usuario al autorizar la fase, y son **distintas a propósito**:
+
+| Qué falla                                                             | Qué se hace           | Por qué                                                                                                                     |
+| --------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| La **estructura**: JSON roto, no es un objeto, `lines` no es un array | se descarta todo      | Un formato desconocido no se interpreta (apartado 4.6: se descarta y se empieza de cero)                                    |
+| Una **línea**: sin identificador, servicio inexistente, repetido      | se descarta esa línea | Lo demás es trabajo legítimo del usuario. Tirar cinco servicios porque uno se retiró es perder lo que sí se puede recuperar |
+| Un **número**: fuera de rango, decimal, texto, ausente                | se normaliza          | El rango válido está definido y hay una función probada que acerca cualquier valor a él                                     |
+
+Y dos casos más, resueltos también por decisión del usuario:
+
+- **`months` en un servicio que no es mensual**: se ignora el campo y la línea
+  se conserva. No interviene en ningún importe.
+- **`localStorage` no disponible** (navegación privada, cookies bloqueadas,
+  cuota agotada): la aplicación funciona igual, simplemente sin guardar. Las
+  tres funciones de `safeLocalStorage` devuelven `null` o `false` en lugar de
+  lanzar, y hay dos tests que **provocan** el fallo sustituyendo `getItem` y
+  `setItem` por funciones que lanzan. Un caso que no se provoca no está probado.
+
+### `normalizeNumber` se ha cobrado la deuda de la Fase 4
+
+La validación de números de esta fase son **cuatro llamadas y ningún caso
+especial**, porque `normalizeNumber` ya recibía `unknown` por decisión del
+usuario en la Fase 4, pensando exactamente en esto. El caso «faltan los meses
+en una línea mensual» no necesitó ni una línea de código:
+`normalizeNumber(undefined, { min: service.minMonths, max: MAX_MONTHS })`
+devuelve el mínimo del servicio, que es con lo que nace una línea nueva en
+`createBudgetLine`.
+
+### El riesgo del arranque, cubierto con tres tests
+
+El borrador se lee **al crear el estado**, con la inicialización perezosa de
+`useReducer`, y no en un efecto posterior. La diferencia no es de estilo:
+
+| Dónde se lee el borrador      | Qué pasa en el primer render                                                                        |
+| ----------------------------- | --------------------------------------------------------------------------------------------------- |
+| Al crear el estado (así está) | el estado nace con las líneas recuperadas: nunca vale «vacío»                                       |
+| En un efecto posterior        | el primer render tiene el presupuesto vacío, y el guardado **borraría** el borrador antes de leerlo |
+
+Lo vigilan tres tests —en el proveedor, en el proveedor con `StrictMode` y en
+`App`—, y los tres comparan **la cadena exacta** guardada antes y después del
+primer render, no solo que haya algo. Lo pidió el usuario al autorizar la fase.
+
+**El test de `StrictMode` se verificó en lugar de darse por bueno:** cuenta las
+lecturas de `localStorage` y comprueba que son **más de una**. Sin ese control,
+un test que dice «aguanta el doble montaje» estaría en verde sin haber ejercido
+ningún doble montaje.
+
+**Y el guardado del primer render tiene un efecto útil**, no solo inofensivo: si
+el borrador traía basura —un precio inventado, una línea de un servicio
+retirado, un número imposible—, `parseDraft` la descarta al crear el estado y el
+efecto deja en el navegador **la versión ya validada, al cargar la página y sin
+que el usuario toque nada**. El borrador se cura solo. El orden es lo que lo
+hace seguro: primero se lee, al crear el estado; después se escribe, en el
+efecto. Comprobado en el navegador por el usuario y fijado con un test.
+
+### «Empezar de nuevo», con confirmación en dos pasos
+
+El botón del apartado 4.6, en `features/budget/ResetBudgetButton.tsx`, con 13
+tests. Borrar el presupuesto no se puede deshacer, así que un clic no basta:
+decisión del usuario.
+
+- No se muestra nada con el presupuesto vacío.
+- El aviso dice **qué se pierde**, no solo «¿seguro?».
+- **No usa `window.confirm`**: no se puede etiquetar en español, bloquea la
+  página, algunos navegadores permiten silenciarlo —y entonces el presupuesto se
+  borraría sin preguntar— y no se puede probar sin sustituir una función global.
+- Está **fuera de `BudgetPanel`** a propósito, así que el panel y sus doce tests
+  no han cambiado para que esta fase añada un botón.
+
+**El foco**, que es la parte que no se ve y la que pidió el usuario:
+
+| Momento          | Dónde va el foco                | Por qué                                                                                                                                 |
+| ---------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Se abre el aviso | al propio aviso                 | Tiene nombre accesible, así que se lee la pregunta completa. **No** al botón de borrar: el mismo Enter que abre el aviso lo confirmaría |
+| Se cancela       | al botón «Empezar de nuevo»     | Es de donde venía. Si no, el foco cae al cuerpo del documento                                                                           |
+| Se confirma      | al mensaje de que se ha borrado | El botón ya no existe, así que el foco necesita un destino, y el mensaje es la confirmación                                             |
+
+### Aislamiento de los tests
+
+`src/test/setup.ts` vacía `localStorage` antes de cada test. Hace falta desde el
+momento en que la aplicación guarda borradores: jsdom tiene **un solo**
+`localStorage` por archivo de test, así que un test que añade servicios dejaría
+su borrador dentro y el siguiente arrancaría con el presupuesto del anterior.
+No es comodidad: un test que depende del anterior ya no prueba lo que dice su
+nombre, y pasa o falla según el orden de ejecución.
+
+### Documentación
+
+- [ADR 0009](docs/adr/0009-borradores-en-localstorage.md): qué se guarda en el
+  navegador, qué no, y cómo se valida lo que vuelve.
+- `docs/prompts/fase-05.md` con el registro de la fase.
+
+---
+
+## Verificaciones de la Fase 5
+
+| Comprobación                           | Resultado                                                                                                                 |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `npm run format:check`                 | en verde (tras reformatear los archivos nuevos)                                                                           |
+| `npm run lint`                         | 0 errores, 0 avisos                                                                                                       |
+| `npm test`                             | **300 de 300 en verde** (190 anteriores + 110 nuevos)                                                                     |
+| `tsc -b`                               | sin errores                                                                                                               |
+| `npm run build`                        | correcto — 237,29 kB de JS (74,00 kB comprimido), 14,49 kB de CSS                                                         |
+| Probado en el navegador por el usuario | recarga con F5, borrador sin nombres ni precios, precio falso ignorado, sin errores en consola, y correcto en vista móvil |
+
+**Siete ciclos rojo-verde completos.** Seis con el fallo de importe sin resolver
+(`Failed to resolve import …`, 0 tests ejecutados) y uno con fallos de
+aserción: los ocho tests nuevos de `App`.
+
+No se ha instalado ninguna dependencia nueva, así que `npm audit` no cambia
+respecto a la Fase 1.
+
+**Una refactorización en verde, provocada por ESLint.** La primera versión de
+`ResetBudgetButton` limpiaba sus dos estados con un `useEffect`, y la regla
+`react-hooks/set-state-in-effect` lo rechazó: provoca un dibujado en cascada, es
+decir, la pantalla se dibuja mal primero y se corrige después. Se sustituyó por
+el patrón que documenta React —ajustar el estado durante el render comparando
+con el valor anterior—, y **los 31 tests del botón y de `App` siguieron en verde
+sin tocar ninguno**.
+
+---
+
+## Revisión del historial para la Fase 10 (hecha en la Fase 5)
+
+Consulta de solo lectura pedida por el usuario, **sin reescribir nada**, para
+saber qué habrá que limpiar antes de hacer público el repositorio.
+
+| Qué se buscó                                                               | Resultado                                                                                                                                            |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| El PDF de requisitos del máster, en **cualquier commit** de cualquier rama | **nunca entró**. Ningún objeto `.pdf` ni ningún nombre parecido en los diez commits. El historial solo contiene archivos de texto                    |
+| El correo del profesor retirado en la Fase 1                               | **no está en el historial**: ni en el contenido, ni en los mensajes de commit, ni en la firma de ningún commit                                       |
+| Direcciones de correo en todo el historial, por dominio                    | solo `@users.noreply.github.com` (18 veces, intencionada) y `@anthropic.com` (10, la línea `Co-Authored-By`)                                         |
+| Fragmentos copiados literalmente del PDF en los documentos actuales        | **ninguno encontrado**. Los tres sitios que resumen los requisitos están parafraseados; no hay ninguna cita en bloque atribuida al documento oficial |
+
+**Conclusión: en la Fase 10 no hay que reescribir el historial.** La corrección
+C1-7 se aplicó antes del primer commit, así que el dato nunca se versionó. Lo
+que sí queda para la Fase 10 es la revisión completa con los **términos que
+aporte el usuario** en ese momento (nombre de la agencia, su dominio y el
+identificador de su correo personal), que es el pendiente nº 15 y la lección de
+la corrección C4-11.
+
+**Dos frases se señalaron al usuario para que decidiera**, y decidió:
+
+1. `docs/prompts/fase-00.md` nombraba el procedimiento interno de entrega de la
+   plataforma del máster. **Neutralizado**: ahora dice «el procedimiento que
+   indica el propio documento oficial», con una nota que explica el cambio. Es
+   la norma del apartado 5 de `CLAUDE.md` que ya actuó en la corrección C1-7:
+   se describe el dato en lugar de reproducirlo.
+2. `docs/prompt-maestro.md` nombra el máster y la escuela. **Se queda**: es la
+   formación del autor y es legítimo nombrarla.
+
+### El material ajeno, en una carpeta ignorada entera
+
+Hasta la Fase 5, el PDF de requisitos estaba excluido por una regla de **ruta
+exacta** (`docs/documento-proyecto-final.pdf`). Ahora vive en
+**`docs/privado/`**, y lo que se ignora es **la carpeta completa**.
+
+El motivo es el mismo que el del apartado 5 de `CLAUDE.md` cuando exige revisar
+categorías de datos y no archivos conocidos: **una lista de archivos falla en
+cuanto aparece uno nuevo**, y quien deje mañana otro documento ajeno en `docs/`
+no tiene por qué acordarse de añadir su nombre al `.gitignore`. Con la carpeta,
+lo que se guarde ahí queda fuera del repositorio por defecto.
+
+El orden de la operación importó y se hizo así a propósito: **primero la regla,
+después el movimiento**. Moviendo antes, el PDF habría pasado por una ruta no
+ignorada, y cualquier `git add -A` en esa ventana lo habría metido en el índice.
+Comprobado con `git check-ignore -v` sobre la ruta nueva **antes** de mover,
+con control positivo (otro archivo cualquiera de esa carpeta) y control negativo
+(un `.md` normal de `docs/`, que no debe estar ignorado).
+
+La regla antigua se mantiene, por si alguna vez reaparece una copia en la ruta
+de antes.
+
+**Lo que no se ha tocado:** las citas de los prompts del usuario en
+`docs/prompts/fase-00.md` y `docs/prompts/fase-01.md` que mencionan la ruta
+antigua. Son transcripciones de lo que se dijo en su momento, y reescribir una
+cita para que encaje con el presente falsifica el registro. La ruta nueva se
+anota donde el texto es nuestro, no suyo.
+
+**La revisión encontró además un fallo del propio método**, y es la cuarta vez
+que aparece la misma familia de problemas: la primera búsqueda sobre los
+mensajes de commit dio «ninguna dirección» y era un **falso negativo**, porque
+la expresión mezclaba escapes de BRE (`\+`) con el modo `-E`. Lo delató el
+control positivo de buscar una simple `@`, que encontró los diez commits. Es el
+problema **P9** de la Fase 2 con otra forma.
+
+---
+
 ## Pendiente y vigilado
 
-| #   | Asunto                                                                                                                                                                                                                                                                                                   | Cuándo                 |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos                                                                                                                                                                                                                                    | Fase 10                |
-| 2   | El favicon sigue siendo el de Vite                                                                                                                                                                                                                                                                       | Fase 11                |
-| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                                                                                                                                                                                                                                       | Fase 9                 |
-| 4   | ~~Confirmar con el usuario los precios, el IGIC y las reglas de descuento~~ **resuelto en la Fase 3**                                                                                                                                                                                                    | —                      |
-| 5   | ~~El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx`~~ **resuelto en la Fase 2**                                                                                                                                                                                      | —                      |
-| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto                                                                                                                                                                                                                     | —                      |
-| 7   | ~~Sustituir la conversión provisional de céntimos a euros de `buildPriceLabel` por el `formatEuros` probado~~ **resuelto en la Fase 3**                                                                                                                                                                  | —                      |
-| 8   | ~~El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto~~ **resuelto en la Fase 4**                                                                                                                                                                              | —                      |
-| 9   | ~~**Los meses de contratación no están en `BudgetLine`.** Entran con su selector~~ **resuelto en la Fase 4**: unión discriminada, meses obligatorios en la línea mensual                                                                                                                                 | —                      |
-| 10  | ~~**Decidir si el resumen muestra «lo que se paga hoy»**~~ **resuelto en la Fase 4**: sí, como línea informativa «A pagar el primer día (orientativo)», fuera del tipo `Budget` ([ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md))                                                            | —                      |
-| 11  | **A qué subtotal se aplica el descuento por pack**: a los tres bloques o solo a alguno. La regla dice «el subtotal» y hay tres                                                                                                                                                                           | Fase 6                 |
-| 12  | ~~`calculateBudget` es el único punto de entrada del cálculo: los componentes no deben hacer cuentas~~ **cumplido en la Fase 4**, y sigue vigilado en las fases 5 a 7                                                                                                                                    | Fases 5-7              |
-| 13  | ~~**Añadir al apartado 1 de `CLAUDE.md` la norma de ritmo de la corrección C3-1**~~ **resuelto al abrir la Fase 4**                                                                                                                                                                                      | —                      |
-| 14  | **Mejora opcional, solo si sobra tiempo:** resumen fijo en un lateral en pantallas anchas, para no tener que bajar hasta el final para ver los totales. Petición del usuario en la Fase 4. Es maquetación, no cálculo: **se recorta antes que cualquier cosa de la lista del apartado 9 de `CLAUDE.md`** | Fase 11, si hay margen |
+| #   | Asunto                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Cuándo                 |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos. **El historial ya está revisado** (ver el apartado anterior): no hay que reescribirlo                                                                                                                                                                                                                                                                                               | Fase 10                |
+| 2   | El favicon sigue siendo el de Vite                                                                                                                                                                                                                                                                                                                                                                                                                         | Fase 11                |
+| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                                                                                                                                                                                                                                                                                                                                                                                         | Fase 9                 |
+| 4   | ~~Confirmar con el usuario los precios, el IGIC y las reglas de descuento~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                                                                                                                      | —                      |
+| 5   | ~~El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx`~~ **resuelto en la Fase 2**                                                                                                                                                                                                                                                                                                                                        | —                      |
+| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto                                                                                                                                                                                                                                                                                                                                                                       | —                      |
+| 7   | ~~Sustituir la conversión provisional de céntimos a euros de `buildPriceLabel` por el `formatEuros` probado~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                                                                                    | —                      |
+| 8   | ~~El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto~~ **resuelto en la Fase 4**                                                                                                                                                                                                                                                                                                                                | —                      |
+| 9   | ~~**Los meses de contratación no están en `BudgetLine`.** Entran con su selector~~ **resuelto en la Fase 4**: unión discriminada, meses obligatorios en la línea mensual                                                                                                                                                                                                                                                                                   | —                      |
+| 10  | ~~**Decidir si el resumen muestra «lo que se paga hoy»**~~ **resuelto en la Fase 4**: sí, como línea informativa «A pagar el primer día (orientativo)», fuera del tipo `Budget` ([ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md))                                                                                                                                                                                                              | —                      |
+| 11  | **A qué subtotal se aplica el descuento por pack**: a los tres bloques o solo a alguno. La regla dice «el subtotal» y hay tres                                                                                                                                                                                                                                                                                                                             | Fase 6                 |
+| 12  | ~~`calculateBudget` es el único punto de entrada del cálculo: los componentes no deben hacer cuentas~~ **cumplido en la Fase 4 y en la Fase 5**: ni el reducer, ni el proveedor, ni `Configurator`, ni el botón de reiniciar hacen una sola cuenta. Sigue vigilado en las fases 6 y 7                                                                                                                                                                      | Fases 6-7              |
+| 13  | ~~**Añadir al apartado 1 de `CLAUDE.md` la norma de ritmo de la corrección C3-1**~~ **resuelto al abrir la Fase 4**                                                                                                                                                                                                                                                                                                                                        | —                      |
+| 14  | **Mejora opcional, solo si sobra tiempo:** resumen fijo en un lateral en pantallas anchas, para no tener que bajar hasta el final para ver los totales. Petición del usuario en la Fase 4. Es maquetación, no cálculo: **se recorta antes que cualquier cosa de la lista del apartado 9 de `CLAUDE.md`**                                                                                                                                                   | Fase 11, si hay margen |
+| 15  | **Los términos concretos de la revisión de secretos los aporta el usuario** en el momento de ejecutarla: el nombre de su agencia, su dominio y el identificador de su correo personal. No pueden estar escritos en el repositorio, porque son precisamente los datos que no deben aparecer (corrección C4-11)                                                                                                                                              | Fase 10                |
+| 16  | **Decidir si los datos del cliente se guardan en el borrador.** El formato actual no guarda ningún dato personal. Un nombre y un correo en `localStorage` son datos personales en un ordenador que puede ser compartido, y el presupuesto funciona igual sin ellos ([ADR 0009](docs/adr/0009-borradores-en-localstorage.md))                                                                                                                               | Fase 7                 |
+| 17  | **La ruta absoluta de trabajo, con el nombre de usuario de Windows, sigue en el historial.** Entró en la Fase 1 en `docs/prompts/fase-00.md`; en la Fase 5 se ha sustituido en el archivo actual por `%USERPROFILE%\…`, pero los commits anteriores la conservan. **Decidir en la Fase 10 si se limpia**, sabiendo que limpiarla obliga a reescribir el historial y que el nombre del autor ya es público por la firma de los commits, que es intencionada | Fase 10                |
 
 ### Riesgos abiertos (del inventario de la Fase 0)
 
@@ -744,54 +1002,67 @@ paquete que recibe el navegador, que es exactamente lo que predijo aquella nota.
 
 ## Siguiente paso
 
-**Fase 5 — Estado del presupuesto.** Context con `useReducer` y borradores en
-`localStorage` con validación.
+**Pendiente inmediato de la Fase 5:** `push` y **verificación en producción**,
+con el mismo criterio que las fases 2, 3 y 4 —SHA remoto consultado al servidor,
+tamaños de los recursos comparados con el build local, cabeceras, 404 en rutas
+sensibles y marcadores del código nuevo en el JS publicado, con control positivo
+y negativo—. Añade una comprobación nueva: que el borrador funciona en el
+dominio de producción, que es un `localStorage` distinto del de `localhost`.
 
-El trabajo de la Fase 4 deja la fase siguiente bastante acotada:
+**Después, Fase 6 — Descuentos con patrón Strategy.** Una estrategia por regla
+—pack, permanencia e importe—, el tope del 20 % y el calculador que las combina,
+con TDD.
 
-- El estado ya existe y está en un solo sitio, el `useState` de `App.tsx`, con
-  **cuatro funciones** que son exactamente las acciones del reducer: alternar
-  un servicio, cambiar la cantidad, cambiar los meses y quitar.
-- **Ningún componente tendrá que cambiar.** `ServiceCatalog` seguirá recibiendo
-  `selectedIds` y `onToggle`, y `BudgetPanel` las líneas y sus tres avisos. Solo
-  cambia quién se los pasa.
-- El estado son **las líneas**, y los identificadores marcados del catálogo se
-  derivan de ellas. No hay dos listas que puedan discrepar.
-- `normalizeNumber` ya está escrita, recibe `unknown` y tiene 15 tests. Es la
-  pieza con la que se validará lo que venga de `localStorage`, que es el punto
-  del apartado 4.6 que exige no romperse con datos dañados.
+El trabajo hecho deja la Fase 6 muy acotada, y es la fase mejor preparada del
+proyecto:
+
+- **Los cuatro valores ya están** en `shared/constants/business-rules.ts` desde
+  la Fase 3, con su test de coherencia que vigila que ningún descuento
+  individual supere el tope.
+- **El hueco donde escribir ya existe:** `discountCents` está en cada
+  `PaymentBlock` desde la Fase 3 y vale 0.
+- **La pantalla está terminada.** Las filas de subtotal y descuento están
+  escritas y probadas desde la Fase 4, aunque valgan 0. La Fase 6 es solo
+  lógica y no debería tocar ningún componente.
+- **Los meses ya están en las líneas** desde la Fase 4, que es el dato que
+  necesita el descuento por permanencia, y `MAX_MONTHS` (36) está por encima de
+  los 12 meses del descuento, con un test que lo vigila.
+- **Queda una decisión por tomar**, la del pendiente nº 11: a qué subtotal se
+  aplica el descuento por pack, porque la regla dice «el subtotal» y hay tres.
 
 No se inicia sin autorización expresa del usuario.
 
 ### Aviso de plazo (apartado 9 de CLAUDE.md)
 
-**El margen ha mejorado, y bastante.** El plan contaba con los días 25 a 28
-para las fases 4 a 11. A 24/11/2026 están cerradas las fases 0 a 4: la Fase 4
-se ha hecho **el mismo día 24**, que no estaba en el cálculo.
+**El margen sigue mejorando.** El plan contaba con los días 25 a 28 para las
+fases 4 a 11. A 24/11/2026 están cerradas las fases 0 a 5: **tres fases el
+mismo día 24** (la 3, la 4 y la 5), ninguna de las cuales estaba en el cálculo.
 
-| Dato                                 | Antes de la Fase 4  | Ahora                   |
-| ------------------------------------ | ------------------- | ----------------------- |
-| Fases pendientes                     | 8 (de la 4 a la 11) | **7** (de la 5 a la 11) |
-| Días de desarrollo (25, 26, 27 y 28) | 4                   | 4                       |
-| Ritmo necesario                      | 2 fases al día      | **1,75 fases al día**   |
+| Dato                                 | Antes de la Fase 4  | Antes de la Fase 5  | Ahora                   |
+| ------------------------------------ | ------------------- | ------------------- | ----------------------- |
+| Fases pendientes                     | 8 (de la 4 a la 11) | 7 (de la 5 a la 11) | **6** (de la 6 a la 11) |
+| Días de desarrollo (25, 26, 27 y 28) | 4                   | 4                   | 4                       |
+| Ritmo necesario                      | 2 fases al día      | 1,75 fases al día   | **1,5 fases al día**    |
 
-Las dos fases cerradas el día 24 —la 3 y la 4— eran una de lógica pura y otra
-de componentes, y las dos cupieron en una sesión. Eso es la mejor estimación
-disponible para las fases 5, 6 y 7, que se parecen a ellas.
+Las tres fases cerradas el día 24 cupieron en una sesión cada una. La Fase 6 se
+parece a la 3 —lógica pura con TDD— y además llega con los valores, el hueco en
+el tipo y la pantalla ya hechos, así que es razonable esperar que sea de las
+cortas.
 
 **Las dos que no se parecen siguen siendo las mismas:** la Fase 8 (descarga de
 los navegadores de Playwright, riesgo **R7**) y la Fase 9 (Husky y GitHub
 Actions, que tocan configuración y pueden pelearse con Windows).
 
-**No se proponen recortes.** Estaba acordado proponerlos al cerrar la Fase 4 si
-no se había recuperado margen, y se ha recuperado. El riesgo **R8** sigue
-abierto —sigue siendo el más serio del proyecto— y el momento natural para
-revisar esto otra vez es **al cerrar la Fase 7**, cuando la aplicación esté
-funcionalmente completa y lo que quede sean calidad, despliegue y entrega. Si
-en ese punto las fases 8 y 9 amenazan los días 29 y 30, el orden preacordado
-es: 1) Husky, 2) tests E2E extra, 3) GitHub Actions avanzado, 4) borradores en
-localStorage, y ahora además, antes que todos ellos, la mejora opcional nº 14
-de la lista de arriba. Nunca se recortan el cálculo del presupuesto, los tests
-de la lógica de negocio, el despliegue, el README, las slides ni el vídeo.
+**No se proponen recortes**, y uno de los candidatos ha desaparecido de la
+lista: los **borradores en localStorage** eran el cuarto elemento del orden de
+recorte preacordado, y ya están hechos y probados. Lo que quedaría por recortar,
+si hiciera falta, es: 1) Husky, 2) tests E2E extra, 3) GitHub Actions avanzado,
+y antes que todos ellos la mejora opcional nº 14 de la lista de arriba.
+
+El riesgo **R8** sigue abierto —sigue siendo el más serio del proyecto— y el
+momento acordado para revisarlo otra vez es **al cerrar la Fase 7**, cuando la
+aplicación esté funcionalmente completa y lo que quede sean calidad, despliegue
+y entrega. Nunca se recortan el cálculo del presupuesto, los tests de la lógica
+de negocio, el despliegue, el README, las slides ni el vídeo.
 
 Los recortes se proponen; no se aplican por iniciativa propia.

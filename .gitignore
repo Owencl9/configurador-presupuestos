@@ -19,9 +19,17 @@ dist-ssr
 .env.*
 !.env.example
 
-# Documentación interna del máster: material ajeno, con datos de contacto de
-# terceros. Se conserva en local como referencia, pero no se versiona ni se
-# publica. Sus requisitos están resumidos en docs/prompts/fase-00.md.
+# Material privado de referencia: no se versiona ni se publica.
+#
+# Se ignora **la carpeta entera**, y no una lista de archivos concretos, por la
+# misma razón que el apartado 5 de CLAUDE.md pide revisar categorías de datos y
+# no archivos conocidos: una lista falla en cuanto aparece un archivo nuevo, y
+# quien lo deje ahí no tiene por qué acordarse de añadir su nombre aquí. Todo lo
+# que se guarde en docs/privado/ queda fuera del repositorio por defecto.
+docs/privado/
+
+# Ruta anterior del mismo material, antes de mudarse a docs/privado/. Se
+# mantiene por si alguna vez reaparece una copia ahí.
 docs/documento-proyecto-final.pdf
 
 # Cobertura de tests
