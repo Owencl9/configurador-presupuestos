@@ -5,8 +5,8 @@
 importe— están implementados con el patrón Strategy, con el tope del 20 % por
 bloque, y el resumen explica **el motivo de cada uno**. Bajo el selector de meses
 hay una pista que dice qué se gana contratando doce. 388 tests en verde. Probado
-en el navegador por el usuario con los tres ejemplos que calculó a mano.
-**Pendiente la verificación en producción.**
+en el navegador por el usuario con los tres ejemplos que calculó a mano, y
+**verificado en producción** (commit `7f15f93`).
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**privado** hasta la Fase 10)
 **Aplicación desplegada:** https://configurador-presupuestos.vercel.app
@@ -1254,6 +1254,59 @@ dos cifras coinciden por aritmética, no porque el descuento no actúe.
 Los 110 tests de la Fase 5, los ocho de integración de la Fase 4 y los del
 catálogo, el formato de euros y la normalización de números **no se han tocado**.
 
+### Verificación en producción (commit `7f15f93`)
+
+Hecha el 25/11/2026 sobre https://configurador-presupuestos.vercel.app, después
+del `push`. El SHA remoto se consultó **al servidor** con `git ls-remote`, no al
+caché local de `origin/main`, y coincide con el local:
+`7f15f93e0f8de5cf8cd89b2de511ebec5739738b`. Árbol de trabajo limpio y firma del
+commit con el correo `noreply`, como autor y como committer.
+
+| Comprobación                                                                    | Resultado                                                                              |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `index.html`                                                                    | HTTP 200, **638 bytes**, y referencia los mismos nombres de recurso que el build local |
+| JS publicado                                                                    | `index-n3ZBI3_0.js`, **239.199 bytes, igual que el build local**                       |
+| CSS publicado                                                                   | `index-zt5yfvTK.css`, **14.538 bytes, igual que el local**                             |
+| Cabeceras de seguridad                                                          | **4 de 4** correctas, más `Strict-Transport-Security`                                  |
+| Sourcemaps (`.js.map`, `.css.map`)                                              | HTTP 404: el código fuente no queda expuesto                                           |
+| Código fuente, `docs/`, `CLAUDE.md`, `package.json`, `.env`, `.git/config`      | HTTP 404 en las 17 rutas probadas                                                      |
+| **`docs/privado/` y el documento que contiene**                                 | **HTTP 404**, en la ruta nueva y en la antigua                                         |
+| Los archivos nuevos de esta fase (`packDiscount.ts`, `fase-06.md`, el ADR 0010) | HTTP 404: no se publica nada del repositorio                                           |
+
+**Control positivo y negativo del contenido publicado.** La misma búsqueda,
+sobre el mismo archivo, encuentra lo que tiene que estar y no encuentra lo que
+no:
+
+| Marcador                                            | Esperado | Resultado    |
+| --------------------------------------------------- | -------- | ------------ |
+| `Permanencia de 12 meses o más`                     | presente | **presente** |
+| `Descuento por permanencia aplicado`                | presente | **presente** |
+| `Pack de 3 servicios o más`                         | presente | **presente** |
+| `Tope del 20 % del subtotal`                        | presente | **presente** |
+| `Desde 12 meses: 10 % de descuento`                 | presente | **presente** |
+| `Pago inicial superior a`                           | presente | **presente** |
+| `Descuento de prueba del` (solo en los tests)       | ausente  | ausente      |
+| `Solo para los tests.` (solo en los tests)          | ausente  | ausente      |
+| `SEO de ejemplo` (dato de los tests)                | ausente  | ausente      |
+| `Una pista de ejemplo` (dato de los tests)          | ausente  | ausente      |
+| `prueba-todo` (estrategia que solo existe en tests) | ausente  | ausente      |
+
+Los cinco últimos son lo que hace válidos a los seis primeros: sin ellos, un
+«presente» no distingue entre «el código está publicado» y «la búsqueda
+encuentra cualquier cosa».
+
+**Un detalle del tope que la verificación aclara:** `Tope del 20 % del subtotal`
+**viaja en el paquete publicado** aunque con las reglas actuales ese texto no
+pueda aparecer nunca en pantalla. Es lo correcto —el código está ahí, listo para
+cuando una regla cambie— y es también un recordatorio de que **estar en el
+paquete no significa ser alcanzable**: lo que demuestra que la regla funciona son
+sus tests, no su presencia en el JS.
+
+**Y queda confirmado que el arreglo de Tailwind de la Fase 1 sigue en pie.** Este
+commit añade 3.784 líneas, buena parte de ellas de documentación en Markdown, y
+el CSS publicado tiene **el mismo nombre y el mismo tamaño** que el del build
+hecho antes de escribirla. La documentación no entra en el CSS.
+
 ---
 
 ## Pendiente y vigilado
@@ -1270,15 +1323,15 @@ catálogo, el formato de euros y la normalización de números **no se han tocad
 | 8   | ~~El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto~~ **resuelto en la Fase 4**                                                                                                                                                                                                                                                                                                                                                                             | —                      |
 | 9   | ~~**Los meses de contratación no están en `BudgetLine`.** Entran con su selector~~ **resuelto en la Fase 4**: unión discriminada, meses obligatorios en la línea mensual                                                                                                                                                                                                                                                                                                                                | —                      |
 | 10  | ~~**Decidir si el resumen muestra «lo que se paga hoy»**~~ **resuelto en la Fase 4**: sí, como línea informativa «A pagar el primer día (orientativo)», fuera del tipo `Budget` ([ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md))                                                                                                                                                                                                                                                           | —                      |
-| 11  | ~~**A qué subtotal se aplica el descuento por pack**~~ **resuelto en la Fase 6**: a los tres bloques, con la condición evaluada sobre todo el presupuesto. Con ella se decidieron otras cuatro cosas que la especificación no contestaba —qué cuenta como servicio distinto, sumar en lugar de encadenar, los umbrales sobre el subtotal sin descontar y el tope por bloque— en el [ADR 0010](docs/adr/0010-como-se-aplican-los-descuentos.md)                                                          | Fase 6                 |
-| 12  | ~~`calculateBudget` es el único punto de entrada del cálculo: los componentes no deben hacer cuentas~~ **cumplido en las fases 4, 5 y 6**: ni el reducer, ni el proveedor, ni `Configurator`, ni el botón de reiniciar, ni el resumen, ni la línea del presupuesto hacen una sola cuenta. En la Fase 6 los descuentos y sus motivos salen de `calculateBudget`, y la pista del selector de meses sale de una función con tests que comparte la condición con la estrategia. Sigue vigilado en la Fase 7 | Fases 6-7              |
+| 11  | ~~**A qué subtotal se aplica el descuento por pack**~~ **resuelto en la Fase 6**: a los tres bloques, con la condición evaluada sobre todo el presupuesto. Con ella se decidieron otras cuatro cosas que la especificación no contestaba —qué cuenta como servicio distinto, sumar en lugar de encadenar, los umbrales sobre el subtotal sin descontar y el tope por bloque— en el [ADR 0010](docs/adr/0010-como-se-aplican-los-descuentos.md)                                                          | —                      |
+| 12  | ~~`calculateBudget` es el único punto de entrada del cálculo: los componentes no deben hacer cuentas~~ **cumplido en las fases 4, 5 y 6**: ni el reducer, ni el proveedor, ni `Configurator`, ni el botón de reiniciar, ni el resumen, ni la línea del presupuesto hacen una sola cuenta. En la Fase 6 los descuentos y sus motivos salen de `calculateBudget`, y la pista del selector de meses sale de una función con tests que comparte la condición con la estrategia. Sigue vigilado en la Fase 7 | Fase 7                 |
 | 13  | ~~**Añadir al apartado 1 de `CLAUDE.md` la norma de ritmo de la corrección C3-1**~~ **resuelto al abrir la Fase 4**                                                                                                                                                                                                                                                                                                                                                                                     | —                      |
 | 14  | **Mejora opcional, solo si sobra tiempo:** resumen fijo en un lateral en pantallas anchas, para no tener que bajar hasta el final para ver los totales. Petición del usuario en la Fase 4. Es maquetación, no cálculo: **se recorta antes que cualquier cosa de la lista del apartado 9 de `CLAUDE.md`**                                                                                                                                                                                                | Fase 11, si hay margen |
 | 15  | **Los términos concretos de la revisión de secretos los aporta el usuario** en el momento de ejecutarla: el nombre de su agencia, su dominio y el identificador de su correo personal. No pueden estar escritos en el repositorio, porque son precisamente los datos que no deben aparecer (corrección C4-11)                                                                                                                                                                                           | Fase 10                |
 | 16  | **Decidir si los datos del cliente se guardan en el borrador.** El formato actual no guarda ningún dato personal. Un nombre y un correo en `localStorage` son datos personales en un ordenador que puede ser compartido, y el presupuesto funciona igual sin ellos ([ADR 0009](docs/adr/0009-borradores-en-localstorage.md))                                                                                                                                                                            | Fase 7                 |
 | 17  | **La ruta absoluta de trabajo, con el nombre de usuario de Windows, sigue en el historial.** Entró en la Fase 1 en `docs/prompts/fase-00.md`; en la Fase 5 se ha sustituido en el archivo actual por `%USERPROFILE%\…`, pero los commits anteriores la conservan. **Decidir en la Fase 10 si se limpia**, sabiendo que limpiarla obliga a reescribir el historial y que el nombre del autor ya es público por la firma de los commits, que es intencionada                                              | Fase 10                |
-| 18  | ~~**Nada en pantalla explica para qué sirven los meses.**~~ **resuelto en la Fase 6**: la pista bajo el selector de meses («Desde 12 meses: 10 % de descuento» → «Descuento por permanencia aplicado»), asociada al campo, y el motivo de cada descuento en el resumen, como pide el apartado 4.4 del prompt maestro. La pista comparte la condición con la estrategia, así que no puede anunciar un descuento que el presupuesto no lleva                                                              | Fase 6                 |
-| 19  | ~~**Decidir si se muestra el compromiso total de los servicios mensuales**~~ **resuelto en la Fase 6**: no se muestra. Sería una cuarta cifra confundible con un total, y encima parcial, porque no incluiría el pago inicial ni el anual ([ADR 0011](docs/adr/0011-sin-compromiso-total.md))                                                                                                                                                                                                           | Fase 6                 |
+| 18  | ~~**Nada en pantalla explica para qué sirven los meses.**~~ **resuelto en la Fase 6**: la pista bajo el selector de meses («Desde 12 meses: 10 % de descuento» → «Descuento por permanencia aplicado»), asociada al campo, y el motivo de cada descuento en el resumen, como pide el apartado 4.4 del prompt maestro. La pista comparte la condición con la estrategia, así que no puede anunciar un descuento que el presupuesto no lleva                                                              | —                      |
+| 19  | ~~**Decidir si se muestra el compromiso total de los servicios mensuales**~~ **resuelto en la Fase 6**: no se muestra. Sería una cuarta cifra confundible con un total, y encima parcial, porque no incluiría el pago inicial ni el anual ([ADR 0011](docs/adr/0011-sin-compromiso-total.md))                                                                                                                                                                                                           | —                      |
 
 ### Riesgos abiertos (del inventario de la Fase 0)
 
@@ -1294,22 +1347,14 @@ catálogo, el formato de euros y la normalización de números **no se han tocad
 
 ## Siguiente paso
 
-**Pendiente inmediato: verificar la Fase 6 en producción**, después del `push`,
-con el mismo procedimiento de las fases anteriores: consultar el SHA remoto al
-servidor con `git ls-remote` —no al caché local de `origin/main`—, comparar los
-tamaños de los recursos publicados con el build local, repasar las cabeceras de
-seguridad y buscar en el JS publicado una pareja de marcadores de control
-positivo y negativo. Los candidatos de esta fase son los motivos de los
-descuentos («Pack de 3 servicios o más», «Permanencia de 12 meses o más»,
-«Tope del 20 % del subtotal») y la pista del selector, que son cadenas literales
-y por tanto sobreviven a la minificación. Como control negativo sirve «Descuento
-de prueba del», que solo existe en los tests.
+**La Fase 6 está cerrada, publicada y verificada**, y no deja ninguna
+comprobación pendiente. Se cierra además la que dejó abierta la Fase 5: el
+usuario probó el borrador **en el dominio de producción** —que tiene un
+`localStorage` distinto del de `localhost`— con el presupuesto de su ejemplo 1 y
+el SEO a 12 meses, y el presupuesto, los meses y los descuentos siguen ahí
+después de recargar con F5.
 
-Queda además la comprobación que dejó abierta la Fase 5 y que **sigue abierta**:
-probar el borrador en el dominio de producción, que tiene un `localStorage`
-distinto del de `localhost`.
-
-**Después, Fase 7 — Cliente y documento final.** Formulario con validación,
+**Siguiente, Fase 7 — Cliente y documento final.** Formulario con validación,
 número de presupuesto, vista de documento y CSS de impresión para PDF.
 
 Lo que la Fase 6 deja preparado y lo que deja vigilado:
