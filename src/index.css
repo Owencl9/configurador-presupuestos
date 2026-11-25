@@ -17,3 +17,66 @@
     font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   }
 }
+
+/* =============================================================================
+   IMPRESIÓN DEL DOCUMENTO (Fase 7)
+   =============================================================================
+
+   El apartado 4.5 pide imprimir o guardar en PDF con la impresión del navegador
+   y CSS de impresión, sin librerías de PDF.
+
+   ## Lo que este archivo NO tiene que hacer
+
+   Ocultar el catálogo, los selectores y el botón de empezar de nuevo. No hacen
+   falta reglas para eso porque **esas piezas no están en la página**: el
+   documento sustituye al configurador en lugar de abrirse debajo, así que lo que
+   no existe no se puede imprimir. Hay un test de integración que lo comprueba
+   («el documento no muestra el catálogo ni ningún selector»).
+
+   Confiar en el CSS de impresión para esconder media aplicación es frágil: si
+   una regla falla o un elemento nuevo se olvida, el catálogo entero aparece en
+   el PDF que recibe un cliente.
+
+   ## Lo que sí hace
+
+   Ocultar los dos botones del propio documento, quitar el fondo gris de la
+   pantalla y evitar que los bloques se partan entre dos páginas.
+
+   ## Lo que no se puede hacer desde aquí
+
+   Los encabezados y pies que añade el navegador —la URL, la fecha, el número de
+   página— **no son parte de la página**, así que ninguna regla de CSS los quita.
+   Se desactivan en el diálogo de impresión, en «Más opciones» → «Encabezados y
+   pies de página».
+   ========================================================================== */
+
+/* Márgenes de la hoja. 15 mm por los cuatro lados: suficiente para que ninguna
+   impresora recorte texto y para que el documento no quede flotando en el
+   centro de un folio. */
+@page {
+  margin: 15mm;
+}
+
+@media print {
+  /* Los dos botones del documento. `!important` porque tiene que ganar a
+     cualquier utilidad de Tailwind que declare `display` en el mismo elemento:
+     es la única regla del proyecto que no puede fallar en silencio, porque su
+     fallo acaba impreso. */
+  .no-print {
+    display: none !important;
+  }
+
+  /* El gris de la pantalla gastaría tinta y saldría como un lavado sucio en
+     cualquier impresora. El texto, a negro puro por el contraste. */
+  html,
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  /* `min-h-screen` reserva la altura de la ventana. Al imprimir, eso puede
+     empujar el contenido y generar una segunda página en blanco. */
+  .min-h-screen {
+    min-height: 0;
+  }
+}

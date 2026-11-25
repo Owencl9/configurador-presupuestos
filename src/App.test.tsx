@@ -595,3 +595,284 @@ describe('App — el borrador del presupuesto', () => {
     })
   })
 })
+
+/*
+ * Tests de integración de la Fase 7: el formulario del cliente, el número de
+ * presupuesto y el documento, conectados con todo lo anterior.
+ *
+ * El reloj se **inyecta** (`now`), así que el número y las dos fechas son
+ * deterministas. Sin eso, un test que comprueba «PRE-2026-0001» dejaría de
+ * pasar el 1 de enero, y otro que comprueba la fecha de emisión podría fallar
+ * al ejecutarse a medianoche. Es el mismo recurso que `calculateBudget` usa con
+ * las estrategias y `BudgetSummary` con el tipo de IGIC: un valor por defecto
+ * para la aplicación y una puerta para los tests.
+ */
+describe('App — el documento del presupuesto', () => {
+  const EMISION = new Date(2026, 10, 25)
+  const reloj = () => EMISION
+
+  /** Añade un servicio de pago único: 1.200,00 € + IGIC = 1.284,00 €. */
+  async function anadirWeb(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Añadir Web corporativa al presupuesto',
+      }),
+    )
+  }
+
+  /** Rellena el nombre y pulsa «Preparar el documento». */
+  async function prepararDocumento(
+    user: ReturnType<typeof userEvent.setup>,
+    nombre = 'Ana Pérez',
+  ) {
+    await user.type(screen.getByLabelText(/^nombre/i), nombre)
+    await user.click(
+      screen.getByRole('button', { name: /preparar el documento/i }),
+    )
+  }
+
+  it('no ofrece el formulario del cliente con el presupuesto vacío', () => {
+    render(<App now={reloj} />)
+
+    expect(
+      screen.queryByRole('button', { name: /preparar el documento/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('no llega al documento si el formulario tiene errores', async () => {
+    const user = userEvent.setup()
+    render(<App now={reloj} />)
+
+    await anadirWeb(user)
+    await user.click(
+      screen.getByRole('button', { name: /preparar el documento/i }),
+    )
+
+    // Sigue el configurador en pantalla, con su catálogo.
+    expect(
+      screen.getByRole('region', { name: 'Diseño web' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: /PRE-/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('lleva del catálogo al documento, con número, fechas, cliente e importes', async () => {
+    const user = userEvent.setup()
+    render(<App now={reloj} />)
+
+    await anadirWeb(user)
+    await prepararDocumento(user)
+
+    expect(
+      screen.getByRole('heading', {
+        level: 1,
+        name: 'Presupuesto PRE-2026-0001',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/25\/11\/2026/)).toBeInTheDocument()
+    expect(screen.getByText(/25\/12\/2026/)).toBeInTheDocument()
+    expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    expect(screen.getByText('Web corporativa')).toBeInTheDocument()
+
+    /*
+     * **Dos coincidencias, y las dos correctas.** Con un único servicio de pago
+     * único, el total del bloque y la cifra del primer día son el mismo importe:
+     * 1.200,00 € + 84,00 € de IGIC. No es una repetición que haya que arreglar,
+     * es lo que significa esa línea —lo que se paga el primer día es,
+     * exactamente, este pago inicial— y por eso lleva su etiqueta
+     * «(orientativo)» y su explicación al lado (ADR 0008).
+     *
+     * La primera versión de este test usaba `getByText` y falló por esto.
+     * Contarlas dice más que buscar una.
+     */
+    expect(screen.getAllByText('1.284,00 €')).toHaveLength(2)
+  })
+
+  it('el documento no muestra el catálogo ni ningún selector', async () => {
+    /*
+     * **El test que sostiene el apartado 4.5**: en el documento impreso no
+     * aparecen botones, selectores ni el catálogo. Y no lo consigue con CSS de
+     * impresión —que jsdom no aplica y que aquí no se puede probar—, lo consigue
+     * porque el documento **sustituye** al configurador en la pantalla, así que
+     * esas piezas no están ni en el DOM ni en el recorrido del teclado.
+     *
+     * Dicho de otro modo: lo que no existe no se puede imprimir. Al CSS de
+     * impresión solo le queda ocultar los dos botones del propio documento.
+     */
+    const user = userEvent.setup()
+    render(<App now={reloj} />)
+
+    await anadirWeb(user)
+    await prepararDocumento(user)
+
+    expect(
+      screen.queryByRole('region', { name: 'Diseño web' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /añadir .* al presupuesto/i }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /empezar de nuevo/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('mantiene la jerarquía de encabezados del documento sin saltos', async () => {
+    const user = userEvent.setup()
+    render(<App now={reloj} />)
+
+    await anadirWeb(user)
+    await prepararDocumento(user)
+
+    const niveles = screen
+      .getAllByRole('heading')
+      .map((encabezado) => Number(encabezado.tagName.slice(1)))
+
+    expect(niveles[0]).toBe(1)
+
+    for (let i = 1; i < niveles.length; i += 1) {
+      expect(niveles[i] - niveles[i - 1]).toBeLessThanOrEqual(1)
+    }
+  })
+
+  describe('el número asignado', () => {
+    it('es el mismo al volver al configurador y entrar otra vez', async () => {
+      /*
+       * Decisión del usuario: el número se reparte **una vez**, al abrir el
+       * documento. Volver atrás, cambiar un servicio y volver a entrar es el
+       * mismo presupuesto afinándose, no uno nuevo.
+       */
+      const user = userEvent.setup()
+      render(<App now={reloj} />)
+
+      await anadirWeb(user)
+      await prepararDocumento(user)
+      await user.click(
+        screen.getByRole('button', { name: /volver al configurador/i }),
+      )
+      await user.click(
+        screen.getByRole('button', { name: /preparar el documento/i }),
+      )
+
+      expect(
+        screen.getByRole('heading', { level: 1, name: /PRE-2026-0001/ }),
+      ).toBeInTheDocument()
+    })
+
+    it('conserva los datos del cliente al volver al configurador', async () => {
+      // Si no, volver atrás a cambiar una cantidad obligaría a escribir otra
+      // vez el nombre y el correo.
+      const user = userEvent.setup()
+      render(<App now={reloj} />)
+
+      await anadirWeb(user)
+      await prepararDocumento(user)
+      await user.click(
+        screen.getByRole('button', { name: /volver al configurador/i }),
+      )
+
+      expect(screen.getByLabelText(/^nombre/i)).toHaveValue('Ana Pérez')
+    })
+
+    it('«Empezar de nuevo» lo olvida, y el documento siguiente recibe otro', async () => {
+      /*
+       * **Petición expresa del usuario al autorizar la fase:** «Empezar de
+       * nuevo» también olvida el número asignado, porque lo que viene después es
+       * otro presupuesto.
+       *
+       * Lo que hace que funcione es dónde vive cada cosa: el número asignado
+       * está en el estado de la pantalla y el **contador** en `localStorage`.
+       * Olvidar el primero no borra el segundo, así que el presupuesto siguiente
+       * recibe el 0002 en lugar de repetir el 0001.
+       */
+      const user = userEvent.setup()
+      render(<App now={reloj} />)
+
+      await anadirWeb(user)
+      await prepararDocumento(user)
+      await user.click(
+        screen.getByRole('button', { name: /volver al configurador/i }),
+      )
+
+      await user.click(
+        screen.getByRole('button', { name: /empezar de nuevo/i }),
+      )
+      await user.click(
+        screen.getByRole('button', { name: /sí, borrar el presupuesto/i }),
+      )
+
+      await anadirWeb(user)
+      await prepararDocumento(user, 'Luis Gómez')
+
+      expect(
+        screen.getByRole('heading', { level: 1, name: /PRE-2026-0002/ }),
+      ).toBeInTheDocument()
+      expect(screen.getByText('Luis Gómez')).toBeInTheDocument()
+    })
+
+    it('«Empezar de nuevo» también olvida los datos del cliente', async () => {
+      // Mismo motivo: lo que viene después es otro presupuesto, y probablemente
+      // de otro cliente. Dejar el nombre anterior escrito es la forma de enviar
+      // un presupuesto con el nombre de otra persona.
+      const user = userEvent.setup()
+      render(<App now={reloj} />)
+
+      await anadirWeb(user)
+      await prepararDocumento(user)
+      await user.click(
+        screen.getByRole('button', { name: /volver al configurador/i }),
+      )
+      await user.click(
+        screen.getByRole('button', { name: /empezar de nuevo/i }),
+      )
+      await user.click(
+        screen.getByRole('button', { name: /sí, borrar el presupuesto/i }),
+      )
+      await anadirWeb(user)
+
+      expect(screen.getByLabelText(/^nombre/i)).toHaveValue('')
+    })
+  })
+
+  it('no guarda ningún dato del cliente en el navegador', async () => {
+    /*
+     * **El test que cierra la decisión nº 16 y el ADR 0013.** Después de
+     * escribir el nombre, la empresa y el correo y de generar el documento, en
+     * `localStorage` no hay ni uno de los tres.
+     *
+     * Y lleva su **control positivo** dentro, que es lo que lo hace válido: el
+     * mismo volcado del almacenamiento tiene que contener el identificador del
+     * servicio y el contador del número. Sin eso, un «no está» no distingue
+     * entre «no se guarda» y «esta comprobación no está mirando donde cree».
+     */
+    const user = userEvent.setup()
+    render(<App now={reloj} />)
+
+    await anadirWeb(user)
+    await user.type(screen.getByLabelText(/^nombre/i), 'Ana Pérez')
+    await user.type(screen.getByLabelText(/^empresa/i), 'Comercial del Norte')
+    await user.type(screen.getByLabelText(/^correo/i), 'ana@ejemplo.example')
+    await user.click(
+      screen.getByRole('button', { name: /preparar el documento/i }),
+    )
+
+    const todo = Object.entries(window.localStorage)
+      .map(([clave, valor]) => `${clave}=${String(valor)}`)
+      .join('\n')
+
+    // Lo que no puede estar.
+    expect(todo).not.toContain('Ana')
+    expect(todo).not.toContain('Pérez')
+    expect(todo).not.toContain('Comercial del Norte')
+    expect(todo).not.toContain('ana@ejemplo.example')
+    // Ni una arroba en todo el almacenamiento: la forma más corta de decir que
+    // ahí no hay ninguna dirección de correo.
+    expect(todo).not.toContain('@')
+
+    // El control positivo: lo que sí tiene que estar, buscado en el mismo sitio
+    // y de la misma forma.
+    expect(todo).toContain('corporate-website')
+    expect(todo).toContain('lastNumber')
+  })
+})

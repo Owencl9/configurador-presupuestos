@@ -117,8 +117,14 @@ interface BloqueDePagoProps {
 function BloqueDePago({ title, payment, block, igicLabel }: BloqueDePagoProps) {
   const hayDescuento = block.discountCents > 0
 
+  /*
+   * `print:break-inside-avoid` (Fase 7) solo actúa al imprimir: un bloque de
+   * pago partido entre dos páginas deja el IGIC en una hoja y el total en la
+   * siguiente. En pantalla no cambia nada, así que los doce tests de este
+   * componente siguen en verde sin tocar ninguno.
+   */
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4">
+    <section className="rounded-lg border border-slate-200 bg-white p-4 print:break-inside-avoid">
       <h4 className="font-semibold text-slate-900">{title}</h4>
 
       <dl className="mt-2 flex flex-col gap-1 text-sm">

@@ -20,10 +20,23 @@ import { BudgetProvider } from './context/BudgetProvider'
  * funcionando sin tocar ni una línea. `main.tsx` solo pone `StrictMode` y la
  * raíz del DOM, que es asunto del navegador y no de la aplicación.
  */
-function App() {
+interface AppProps {
+  /**
+   * De dónde sale «ahora». Solo lo usan los tests; la aplicación no lo pasa y
+   * entonces se usa el reloj del sistema.
+   *
+   * Está aquí porque los tests de integración montan `<App />`, que es la
+   * aplicación completa, y el documento de la Fase 7 muestra dos fechas y un
+   * número con el año dentro. Sin esta puerta, esos tests dependerían del día en
+   * que se ejecutan.
+   */
+  readonly now?: () => Date
+}
+
+function App({ now }: AppProps = {}) {
   return (
     <BudgetProvider>
-      <Configurator />
+      <Configurator now={now} />
     </BudgetProvider>
   )
 }

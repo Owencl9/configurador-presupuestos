@@ -31,6 +31,21 @@ y manda sobre este archivo en caso de duda.
   condiciona.** Si un comando comprueba algo y después borra, modifica o
   publica, el resultado de la comprobación no impide nada. Dos pasos: primero
   comprobar y mostrar el resultado, después actuar.
+- **Los archivos se editan con la herramienta de edición, nunca con comandos de
+  shell.** Ni `Get-Content … -replace … | Set-Content`, ni `cat >>`, ni un
+  _heredoc_, ni `echo >`, ni equivalentes: tampoco para **añadir** texto al
+  final de un archivo. El motivo de fondo es que el cambio se tiene que poder
+  revisar en el panel de diferencias antes de aceptarlo, y lo que escribe un
+  comando no aparece ahí. Norma
+  acordada al autorizar la Fase 7 (corrección C6-1 de la Fase 6), por tres
+  motivos comprobados: `Set-Content -Encoding utf8` en Windows PowerShell 5.1
+  **añade una marca BOM** al principio del archivo, `-NoNewline` **quita el
+  salto de línea final** que Prettier exige, y un reemplazo con expresión
+  regular sobre un archivo entero **no dice cuántas veces va a coincidir ni
+  dónde**. Si hay que sustituir un texto varias veces, primero se cuenta cuántas
+  veces aparece y se muestra el resultado, y después se edita. Lo que se rechaza
+  no es un comando que falle —el que se paró habría funcionado—, es una forma de
+  trabajar que no se puede revisar antes de ejecutarla.
 
 ## 2. Idioma
 

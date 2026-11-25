@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AMOUNT_DISCOUNT_PERCENT,
   AMOUNT_DISCOUNT_THRESHOLD_CENTS,
+  BUDGET_VALIDITY_DAYS,
   COMMITMENT_DISCOUNT_MIN_MONTHS,
   COMMITMENT_DISCOUNT_PERCENT,
   IGIC_RATE_PERCENT,
@@ -129,6 +130,27 @@ describe('reglas de negocio', () => {
        */
       expect(Number.isInteger(MAX_MONTHS)).toBe(true)
       expect(MAX_MONTHS).toBeGreaterThan(COMMITMENT_DISCOUNT_MIN_MONTHS)
+    })
+  })
+
+  /*
+   * Validez del presupuesto (Fase 7).
+   *
+   * Decide una fecha que va impresa en un documento que se envía a un cliente,
+   * así que el valor tiene que ser utilizable por un calendario: un entero de
+   * días y positivo.
+   */
+  describe('validez del presupuesto', () => {
+    it('expresa la validez como un número entero y positivo de días', () => {
+      /*
+       * Entero porque `calculateValidUntil` suma este valor al componente del
+       * día de una fecha: un 30,5 daría una fecha con horas arrastradas y la
+       * validez dejaría de caer a la misma hora que la emisión. Positivo porque
+       * un presupuesto que caduca el día que se emite, o antes, no es una
+       * validez.
+       */
+      expect(Number.isInteger(BUDGET_VALIDITY_DAYS)).toBe(true)
+      expect(BUDGET_VALIDITY_DAYS).toBeGreaterThan(0)
     })
   })
 })

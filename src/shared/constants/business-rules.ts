@@ -123,3 +123,67 @@ export const MAX_QUANTITY = 99
  * no se cumple nunca. Hay un test de coherencia que lo comprueba.
  */
 export const MAX_MONTHS = 36
+
+/* -----------------------------------------------------------------------------
+ * Validez del presupuesto (Fase 7)
+ *
+ * Tampoco es una regla de precio, pero decide una fecha que va impresa en un
+ * documento que se envía a un cliente, así que vive aquí por el mismo motivo
+ * que las demás: el apartado 4.3 exige un único archivo de constantes, y
+ * cambiar la validez tiene que ser cambiar un número en un sitio.
+ * -------------------------------------------------------------------------- */
+
+/**
+ * Días que un presupuesto sigue siendo válido desde su fecha de emisión.
+ *
+ * Treinta, como fija el apartado 4.5 de la especificación. El documento muestra
+ * las dos fechas —emisión y validez— y la segunda la calcula
+ * `calculateValidUntil`, que toma este valor por defecto.
+ *
+ * Es un **entero de días**, no un número de meses ni de milisegundos: los meses
+ * no tienen todos la misma longitud y los días no tienen todos 24 horas (hay
+ * cambios de horario de verano). Ver `features/budget-document/budgetValidity.ts`.
+ */
+export const BUDGET_VALIDITY_DAYS = 30
+
+/* -----------------------------------------------------------------------------
+ * Límites del formulario del cliente (Fase 7)
+ *
+ * Mismo criterio que los límites de los selectores de arriba: no son reglas de
+ * precio, pero son reglas, porque deciden qué se puede escribir. Y están aquí
+ * por el mismo motivo —un único archivo de constantes— y por uno más: los
+ * mismos números aparecen en la validación y en el **mensaje de error** que lee
+ * la persona. Leyéndolos del mismo sitio, el mensaje no puede decir «80
+ * caracteres» con el límite puesto en 60.
+ *
+ * Qué campos son obligatorios es decisión del usuario al autorizar la fase:
+ * nombre sí, empresa y correo no.
+ * -------------------------------------------------------------------------- */
+
+/**
+ * Caracteres mínimos del nombre del cliente.
+ *
+ * Una letra sola no es un nombre. Dos sí pueden serlo —hay nombres y apellidos
+ * de dos letras—, así que el mínimo no puede subir sin dejar fuera a personas
+ * reales.
+ */
+export const CLIENT_NAME_MIN_LENGTH = 2
+
+/**
+ * Caracteres máximos del nombre y de la empresa.
+ *
+ * Ochenta sobran para cualquier nombre o razón social, y el tope existe por dos
+ * motivos prácticos: un texto más largo rompe la maqueta del documento impreso,
+ * y un campo de texto sin límite es una invitación a pegar dentro cualquier
+ * cosa.
+ */
+export const CLIENT_TEXT_MAX_LENGTH = 80
+
+/**
+ * Caracteres máximos del correo del cliente.
+ *
+ * Este número no es una elección: **254 es la longitud máxima de una dirección
+ * de correo** según la norma del protocolo (RFC 5321). Poner menos rechazaría
+ * direcciones válidas.
+ */
+export const CLIENT_EMAIL_MAX_LENGTH = 254

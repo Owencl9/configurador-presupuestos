@@ -10,15 +10,20 @@ Trabajo Final de Máster — Máster en Desarrollo con Inteligencia Artificial
 
 **🔗 Aplicación en funcionamiento: https://configurador-presupuestos.vercel.app**
 
-> **Estado: en desarrollo (Fase 6 de 11 completada).** La aplicación ya está
-> desplegada y se actualiza automáticamente con cada `push`. **El presupuesto
-> funciona de principio a fin**: se añaden servicios del catálogo, se eligen la
-> cantidad y los meses respetando los mínimos de cada servicio, y el resumen se
-> actualiza al instante con el pago inicial, la cuota mensual y el pago anual,
-> cada uno con sus descuentos —**explicando el motivo de cada uno**—, su base
-> imponible, su IGIC al 7 % y su total. **El presupuesto en curso se guarda en el
-> navegador** y sigue ahí al volver. Lo que falta es el documento imprimible para
-> el cliente (Fase 7).
+> **Estado: en desarrollo (Fase 7 de 11 completada).** La aplicación ya está
+> desplegada y se actualiza automáticamente con cada `push`. **El recorrido
+> completo funciona**: se añaden servicios del catálogo, se eligen la cantidad y
+> los meses respetando los mínimos de cada servicio, y el resumen se actualiza al
+> instante con el pago inicial, la cuota mensual y el pago anual, cada uno con
+> sus descuentos —**explicando el motivo de cada uno**—, su base imponible, su
+> IGIC al 7 % y su total. **El presupuesto en curso se guarda en el navegador** y
+> sigue ahí al volver. Con el presupuesto hecho se escriben los datos del
+> cliente y se obtiene **el documento final, con su número y su validez, listo
+> para imprimir o guardar en PDF** desde el propio navegador.
+>
+> La aplicación está **funcionalmente completa**. Lo que queda son las fases de
+> calidad y entrega: tests E2E, accesibilidad e integración continua, repositorio
+> público y documentación final.
 
 > ### ⚠️ Los precios son ficticios
 >
@@ -29,6 +34,14 @@ Trabajo Final de Máster — Máster en Desarrollo con Inteligencia Artificial
 > como oferta comercial. El repositorio es público y las tarifas reales del autor
 > no se publican. El aviso está también en la cabecera de
 > [`src/shared/data/services.ts`](src/shared/data/services.ts).
+>
+> Lo mismo vale para **los datos de la agencia que emite el presupuesto** —el
+> nombre, el NIF, la dirección y el contacto que aparecen en el documento—:
+> están inventados y son claramente de ejemplo, con dominios bajo `.example`,
+> que la [RFC 2606](https://www.rfc-editor.org/rfc/rfc2606) reserva precisamente
+> para esto. Viven en un único archivo,
+> [`src/shared/constants/agency.ts`](src/shared/constants/agency.ts), y el
+> documento impreso lo dice en su pie.
 
 ## Stack tecnológico
 
@@ -76,6 +89,24 @@ El servidor de desarrollo queda en http://localhost:5173.
 | `npm run format`       | formatea el código con Prettier                                  |
 | `npm run format:check` | comprueba el formato sin modificar archivos                      |
 
+## Credenciales de prueba
+
+**No hay. La aplicación no tiene inicio de sesión**, así que no existe ningún
+usuario ni contraseña de prueba que haya que facilitar para evaluarla: se abre la
+URL y está todo disponible desde el primer momento.
+
+No es un olvido, es una decisión tomada al empezar y razonada en el
+[ADR 0002](docs/adr/0002-sin-backend.md): sin backend no hay nada que
+autenticar. Todo el cálculo ocurre en el navegador, no hay cuentas, no hay
+usuarios y no hay ningún dato que pertenezca a una persona y haya que proteger
+de otra.
+
+Las dos cosas que la aplicación guarda —el borrador del presupuesto y el
+contador de números— viven en el `localStorage` del navegador de quien la usa, y
+no contienen ningún dato personal. **Los datos del cliente que se escriben para
+el documento no se guardan en ninguna parte**
+([ADR 0013](docs/adr/0013-datos-del-cliente-no-se-guardan.md)).
+
 ## Estructura del proyecto
 
 Organización por ámbito (_Scope Rule_): lo compartido en `shared/`, lo
@@ -87,22 +118,28 @@ específico de cada funcionalidad en su propia carpeta.
 │   └── prompts/            Registro de prompts por fase (evidencia de desarrollo con IA)
 ├── public/                 Archivos servidos tal cual
 └── src/
+    ├── main.tsx            Punto de entrada: monta React en el DOM
+    ├── App.tsx             El proveedor del estado y la pantalla
+    ├── Configurator.tsx    Reparte el estado y elige qué se ve: configurador o documento
+    ├── index.css           Tailwind, tipografía base y el CSS de impresión
     ├── context/            Estado global del presupuesto (Context + useReducer)
     ├── features/           Código propio de cada funcionalidad
     │   ├── budget/           Presupuesto: cálculo, líneas, resumen, panel y borradores
+    │   ├── budget-document/  Documento final: número, validez y vista imprimible
+    │   ├── client-form/      Datos del cliente: validación y formulario
     │   └── service-catalog/  Catálogo: agrupación por categorías y formato del precio
     ├── shared/             Código usado por varias funcionalidades
     │   ├── components/     Componentes reutilizables (ServiceCard, QuantitySelector)
-    │   ├── constants/      Reglas de negocio y sus valores (IGIC, descuentos, límites)
+    │   ├── constants/      Reglas de negocio y sus valores (IGIC, descuentos, límites) y los datos ficticios de la agencia
     │   ├── data/           Catálogo de servicios (archivo de datos editable)
     │   ├── strategies/     Una regla de descuento por archivo, y el calculador que las combina
     │   ├── types/          Tipos de TypeScript del dominio
-    │   └── utils/          Utilidades compartidas (importes, porcentajes, normalización, localStorage)
+    │   └── utils/          Utilidades compartidas (importes, fechas, porcentajes, normalización, localStorage)
     └── test/               Configuración común de los tests
 ```
 
-A medida que avancen las fases se añadirán más carpetas en `src/features/`
-(formulario de cliente, documento final) y `e2e/` (tests de Playwright).
+En la Fase 8 se añadirá `e2e/`, con los tests de Playwright y sus Page Objects.
+Todavía no existe.
 
 Los tests viven junto al código que prueban: `ServiceCard.tsx` y
 `ServiceCard.test.tsx` están en la misma carpeta.
@@ -192,6 +229,57 @@ navegador no permite guardar —cookies bloqueadas, cuota agotada— la aplicaci
 funciona igual, simplemente sin borradores. Razonado en el
 [ADR 0009](docs/adr/0009-borradores-en-localstorage.md).
 
+### El documento del presupuesto
+
+Con el presupuesto hecho se escriben los datos del cliente —**solo el nombre es
+obligatorio**; la empresa y el correo son opcionales— y se obtiene el documento
+final, que **sustituye en pantalla al configurador** en lugar de abrirse debajo.
+
+Eso último no es maquetación: es lo que garantiza que el catálogo y los
+selectores **no puedan salir impresos**. No están ocultos, no están en la
+página. El CSS de impresión solo tiene que esconder los dos botones del propio
+documento, y hay un test que comprueba que llevan la clase que los oculta.
+
+Se imprime o se guarda en PDF con **la impresión del navegador** (`Ctrl+P`), sin
+ninguna librería de PDF. Para que el PDF salga limpio conviene desactivar
+«Encabezados y pies de página» en el diálogo de impresión: la URL, la fecha y el
+número de página los añade el navegador alrededor de la página, y no hay CSS que
+pueda quitarlos.
+
+El documento lleva:
+
+| Dato                           | Detalle                                                                                                                           |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Los datos de la agencia        | Ficticios, en un único archivo de constantes                                                                                      |
+| **El número**, `PRE-2026-0001` | Formato `PRE-AAAA-NNNN`, serie anual, repartido una sola vez por presupuesto ([ADR 0012](docs/adr/0012-numero-de-presupuesto.md)) |
+| Las dos fechas                 | La de emisión y la de validez, **30 días** después, las dos a la vista                                                            |
+| El cliente                     | Lo escrito en el formulario, sin filas vacías si se dejan en blanco los campos opcionales                                         |
+| Los servicios                  | En modo lectura: ni un botón ni un campo                                                                                          |
+| Los tres bloques de pago       | **El mismo componente que la pantalla**, con el mismo presupuesto, para que lo impreso no pueda discrepar de lo que se vio        |
+| La línea del primer día        | Con su etiqueta y la frase que dice qué incluye pegada debajo ([ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md))       |
+| El pie                         | «Documento de ejemplo. Los importes y los datos de la agencia son ficticios.»                                                     |
+
+Lo que **no** lleva: ningún total general
+([ADR 0007](docs/adr/0007-redondeo-del-igic.md)) y ningún compromiso total
+([ADR 0011](docs/adr/0011-sin-compromiso-total.md)). Las dos ausencias tienen
+tests que las vigilan, porque una hoja con huecos invita a rellenarlos.
+
+> **La numeración es de cada navegador.** El contador vive en `localStorage`,
+> así que no hay una serie única: dos personas distintas pueden recibir las dos
+> un `PRE-2026-0001`, y la misma persona en otro equipo vuelve a empezar por el 0001. Es la consecuencia de no tener servidor
+> ([ADR 0002](docs/adr/0002-sin-backend.md)) y está aceptada a propósito, con el
+> aviso en pantalla junto al número. En el documento impreso no aparece: un
+> cliente no tiene por qué leer que su número puede estar repetido.
+
+**Los datos del cliente no se guardan en ninguna parte**: ni en `localStorage`,
+ni en una cookie, ni se envían a ningún servidor. Viven en la memoria de la
+página mientras está abierta, así que al recargar hay que escribirlos otra vez, y
+la pantalla lo avisa. Lo que sostiene esa promesa no es una intención: el efecto
+que guarda el borrador serializa el estado del reducer, y esos datos viven
+fuera de él. Razonado en el
+[ADR 0013](docs/adr/0013-datos-del-cliente-no-se-guardan.md), con dos tests que
+lo comprueban sobre el contenido real del navegador.
+
 ## Funcionalidades
 
 - ✅ Catálogo de servicios agrupados por categoría, con pago único, mensual o anual
@@ -209,11 +297,21 @@ funciona igual, simplemente sin borradores. Razonado en el
   **cada uno con su motivo explicado en el resumen**, y una pista bajo el
   selector de meses que dice qué se gana contratando doce
   ([ADR 0010](docs/adr/0010-como-se-aplican-los-descuentos.md))
+- ✅ Formulario con los datos del cliente, con validación, mensajes en español
+  asociados a su campo y el foco en el primero que falla. **Esos datos no se
+  guardan en ninguna parte**
+  ([ADR 0013](docs/adr/0013-datos-del-cliente-no-se-guardan.md))
+- ✅ Número de presupuesto `PRE-AAAA-NNNN` con serie anual
+  ([ADR 0012](docs/adr/0012-numero-de-presupuesto.md)) y validez de 30 días,
+  mostrando la fecha de emisión y la de caducidad
+- ✅ Documento final con aspecto de presupuesto, que **sustituye en pantalla al
+  configurador**, y CSS de impresión para imprimirlo o guardarlo en PDF desde el
+  navegador, sin librerías de PDF
 
 ### Previstas
 
-- Datos del cliente, número de presupuesto y validez
-- Vista imprimible del presupuesto, para guardar como PDF desde el navegador
+- Tests de extremo a extremo con Playwright (Fase 8)
+- Reglas automáticas de accesibilidad e integración continua (Fase 9)
 
 ## Despliegue
 
@@ -242,8 +340,8 @@ cabecera que puede dejar la página en blanco si se escribe mal.
 ## Metodología
 
 - **TDD** en toda la lógica de negocio: primero el test, se comprueba que falla,
-  después la implementación mínima y por último la refactorización. **388 tests
-  en verde** al cerrar la Fase 6.
+  después la implementación mínima y por último la refactorización. **560 tests
+  en verde** al cerrar la Fase 7.
 - **Una comprobación en verde no cuenta hasta que se demuestra que puede ponerse
   en rojo.** Las búsquedas de seguridad llevan un control positivo —buscar algo
   que se sabe que existe— y los tests que pasan a la primera se verifican
