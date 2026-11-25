@@ -8,8 +8,8 @@ su validez de 30 días, listo para imprimir o guardar en PDF con la impresión d
 navegador. **Los datos del cliente no se guardan en ninguna parte**
 ([ADR 0013](docs/adr/0013-datos-del-cliente-no-se-guardan.md)). 560 tests en
 verde. Probado en el navegador por el usuario, incluida la vista de impresión con
-`Ctrl+P` y el PDF guardado sin los encabezados del navegador. Pendiente de
-verificar en producción.
+`Ctrl+P` y el PDF guardado sin los encabezados del navegador, y **verificado en
+producción** (commit `99dd7ba`).
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**privado** hasta la Fase 10)
 **Aplicación desplegada:** https://configurador-presupuestos.vercel.app
@@ -1726,6 +1726,96 @@ documentación, y van tres fases seguidas haciendo falta.
 
 ---
 
+## Verificación en producción (commit `99dd7ba`)
+
+Hecha el 25/11/2026 sobre https://configurador-presupuestos.vercel.app, después
+del `push`. El SHA remoto se consultó **al servidor** con `git ls-remote`, no al
+caché local de `origin/main`, y coincide con el local:
+`99dd7bad09a306589d95f388c10cb3c14c9e4613`. Árbol de trabajo limpio y firma del
+commit con el correo `noreply`, como autor y como committer.
+
+**El mensaje del commit se escribió en un archivo fuera del proyecto y se pasó
+con `git commit -F`** (como en la Fase 6), y se comprobó antes de enviarlo que el
+archivo era UTF-8 sin BOM —la `ú` guardada como `c3 ba` y no como el `fa` de
+CP1252— y después, que el mensaje guardado por git conserva las 19 líneas con
+tildes.
+
+| Comprobación                                                                            | Resultado                                                                              |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `index.html`                                                                            | HTTP 200, **638 bytes**, y referencia los mismos nombres de recurso que el build local |
+| JS publicado                                                                            | `index-BpmhP4VQ.js`, **249.170 bytes, e idéntico byte a byte** al build local (`cmp`)  |
+| CSS publicado                                                                           | `index-yYO2TO7R.css`, **16.482 bytes, idéntico byte a byte** al build local (`cmp`)    |
+| Cabeceras de seguridad                                                                  | **4 de 4** correctas, más `Strict-Transport-Security`                                  |
+| Sourcemaps (`.js.map`, `.css.map`)                                                      | HTTP 404: el código fuente no queda expuesto                                           |
+| **`docs/privado/` y el PDF que contiene**                                               | **HTTP 404**, en la carpeta y en el archivo                                            |
+| Código fuente, `docs/`, los dos ADR nuevos, `CLAUDE.md`, `package.json`, `.env`, `.git` | HTTP 404 en las 19 rutas probadas                                                      |
+| Control positivo de esos 404                                                            | un recurso que **sí** existe devuelve 200, así que el 404 significa «no publicado»     |
+
+Esta vez el `cmp` sustituye a la comparación de tamaños de las fases anteriores:
+dos archivos del mismo tamaño pueden ser distintos, y lo que interesa saber es
+que Vercel compiló **los mismos bytes**.
+
+**Probado por el usuario en el dominio de producción**, que es lo que ninguna de
+estas comprobaciones puede sustituir: el documento con `PRE-2026-0001`, las
+cifras de su ejemplo 1 y la vista de impresión con `Ctrl+P`.
+
+Y el número de ese documento es, por sí solo, la confirmación del
+[ADR 0012](docs/adr/0012-numero-de-presupuesto.md) en vivo: en local la serie iba
+ya por el 0002, y en producción empieza otra vez por el **0001** porque el
+`localStorage` de ese dominio es otro. La numeración por navegador no es una nota
+al pie del ADR, es algo que se ve.
+
+**Control positivo y negativo del contenido publicado.** La misma búsqueda, sobre
+el mismo archivo, encuentra lo que tiene que estar y no encuentra lo que no:
+
+| Marcador                                                             | Esperado | Resultado    |
+| -------------------------------------------------------------------- | -------- | ------------ |
+| `Agencia Ejemplo, S.L.` y `contacto@agencia-ejemplo.example`         | presente | **presente** |
+| `Documento de ejemplo. Los importes y los datos de la agencia…`      | presente | **presente** |
+| `Imprimir o guardar en PDF`, `Volver al configurador`, `no-print`    | presente | **presente** |
+| `La numeración se lleva en este navegador`                           | presente | **presente** |
+| `configurador-presupuestos:budget-counter:v1`                        | presente | **presente** |
+| `Escribe el nombre del cliente.` y `nombre@example.com`              | presente | **presente** |
+| `Datos del cliente`, `Preparar el documento`, `Fecha de emisión`     | presente | **presente** |
+| `nombre@dominio.com` (el texto que corrigió la C7-4)                 | ausente  | **ausente**  |
+| `CONTROL-POSITIVO` (el dominio falso del control, ya revertido)      | ausente  | **ausente**  |
+| `ana@ejemplo.example`, `Comercial del Norte` (datos de tests)        | ausente  | ausente      |
+| `empresa.es`, `sub.dominio.org` (los dominios retirados)             | ausente  | **ausente**  |
+| `nombre.apellido@example.com`, `MAYUSCULAS@EXAMPLE.COM` (solo tests) | ausente  | ausente      |
+| `Solo para los tests.`                                               | ausente  | ausente      |
+
+Las dos filas que más dicen son las del medio: **`nombre@dominio.com` ya no
+viaja en el paquete publicado y `nombre@example.com` sí**, así que la corrección
+C7-4 está en producción y no solo en el repositorio. Y `CONTROL-POSITIVO`
+—el dominio falso que se usó para comprobar que las aserciones seguían atadas al
+mensaje— **no llegó nunca al paquete**, que es la prueba de que se revirtió.
+
+### El CSS de impresión, en producción
+
+| Buscado en el CSS publicado                            | Resultado                      |
+| ------------------------------------------------------ | ------------------------------ |
+| `@media print`                                         | 2 (el de Tailwind y el propio) |
+| `@page`, `min-height:0`                                | 1 cada uno                     |
+| `display:none!important`                               | 2                              |
+| `.break-inside-avoid{` y `.print\:break-inside-avoid{` | **1 cada uno**, los dos        |
+| `ESTO-NO-EXISTE` y `.print\:NO-EXISTE{` (negativos)    | 0                              |
+
+**Y el problema P35 apareció una tercera vez, con otro disfraz.** El primer
+recuento de los dos selectores en producción devolvió **uno solo**, y pareció que
+el de impresión no se había publicado. No faltaba: la expresión regular llevaba
+la barra invertida mal escapada —cuatro barras en una cadena entre comillas no
+son las que llegan al buscador— y el patrón no podía coincidir con nada. Con
+búsqueda literal (`grep -F`) aparecen los dos, y se ven en su contexto.
+
+Las tres veces de esta fase han sido la misma historia: **un número tranquilo que
+resultó ser la respuesta a otra pregunta.** `grep -c` contando líneas sobre un
+archivo minificado, un filtro que excluía justo el dominio buscado (corrección
+C7-4) y ahora un escapado roto. La lección operativa es corta: **cuando una
+búsqueda dice que algo no está, hay que comprobar que la búsqueda encuentra algo
+que sí está** —y, si lleva metacaracteres, repetirla sin ellos.
+
+---
+
 ## Pendiente y vigilado
 
 | #   | Asunto                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Cuándo                 |
@@ -1764,10 +1854,9 @@ documentación, y van tres fases seguidas haciendo falta.
 
 ## Siguiente paso
 
-**La Fase 7 está cerrada y la aplicación está funcionalmente completa.** Lo que
-queda por hacer no añade ninguna funcionalidad al producto: son calidad,
-despliegue y entrega. Queda pendiente la **verificación en producción** de esta
-fase, después del `push`.
+**La Fase 7 está cerrada, publicada y verificada**, y la aplicación está
+funcionalmente completa. Lo que queda por hacer no añade ninguna funcionalidad al
+producto: son calidad, despliegue y entrega.
 
 **Siguiente, Fase 8 — Tests de extremo a extremo con Playwright**, con Page
 Objects en `e2e/`, que es la carpeta que todavía no existe.
