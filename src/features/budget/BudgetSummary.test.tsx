@@ -1,7 +1,11 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import type { Budget, PaymentBlock } from '../../shared/types/budget'
+import type {
+  AppliedDiscount,
+  Budget,
+  PaymentBlock,
+} from '../../shared/types/budget'
 import { BudgetSummary } from './BudgetSummary'
 
 /**
@@ -15,9 +19,17 @@ const bloque = (
   taxableBaseCents: number,
   igicCents: number,
   discountCents = 0,
+  discounts: readonly AppliedDiscount[] = [],
 ): PaymentBlock => ({
   subtotalCents: taxableBaseCents + discountCents,
   discountCents,
+  /*
+   * Los motivos llegan en la Fase 6. Se pasan aparte del importe porque este
+   * componente tiene que poder recibir un bloque con descuento y sin motivos
+   * —es lo que producía la Fase 4— y comportarse bien: la fila «Descuento»
+   * aparece igual, y lo que no hay es desglose.
+   */
+  discounts,
   taxableBaseCents,
   igicCents,
   totalCents: taxableBaseCents + igicCents,
@@ -171,6 +183,131 @@ describe('BudgetSummary', () => {
       expect(screen.getByText('2.625,00 €')).toBeInTheDocument() // el subtotal
       expect(screen.getByText('Descuento')).toBeInTheDocument()
       expect(screen.getByText('-125,00 €')).toBeInTheDocument()
+    })
+  })
+
+  /* ---------------------------------------------------------------------------
+   * El motivo de cada descuento (Fase 6).
+   *
+   * Es lo que pide el apartado 4.4 del prompt maestro —«descuentos aplicados,
+   * explicando el motivo de cada uno»— y el pendiente nº 18 de PROGRESO.md.
+   *
+   * La fila «Descuento» con el total **se conserva** y el detalle va debajo
+   * (decisión del usuario al autorizar la fase). Así el desglose no cambia de
+   * forma según cuántos descuentos haya, y los tests de la Fase 4 siguen
+   * valiendo tal cual.
+   * ------------------------------------------------------------------------ */
+  describe('el motivo de cada descuento', () => {
+    const PACK: AppliedDiscount = {
+      id: 'pack',
+      label: 'Pack de 3 servicios o más (5 %)',
+      amountCents: 2_250,
+    }
+
+    const PERMANENCIA: AppliedDiscount = {
+      id: 'commitment',
+      label: 'Permanencia de 12 meses o más (10 %)',
+      amountCents: 4_500,
+    }
+
+    /** La cuota mensual del primer ejemplo del usuario, con sus dos motivos. */
+    const CUOTA_CON_DOS_DESCUENTOS: Budget = {
+      oneTime: VACIO,
+      monthly: bloque(38_250, 2_678, 6_750, [PACK, PERMANENCIA]),
+      yearly: VACIO,
+    }
+
+    it('muestra una fila por motivo, con su importe en negativo', () => {
+      render(<BudgetSummary budget={CUOTA_CON_DOS_DESCUENTOS} />)
+
+      expect(
+        screen.getByText('Pack de 3 servicios o más (5 %)'),
+      ).toBeInTheDocument()
+      expect(screen.getByText('-22,50 €')).toBeInTheDocument()
+      expect(
+        screen.getByText('Permanencia de 12 meses o más (10 %)'),
+      ).toBeInTheDocument()
+      expect(screen.getByText('-45,00 €')).toBeInTheDocument()
+    })
+
+    it('conserva la fila del descuento total encima del detalle', () => {
+      /*
+       * 22,50 € + 45,00 € = 67,50 €. La fila del total es la que permite leer
+       * el desglose sin sumar de cabeza, y es la que ya existía desde la
+       * Fase 4: el orden de cálculo del apartado 4.3 se sigue viendo completo.
+       */
+      render(<BudgetSummary budget={CUOTA_CON_DOS_DESCUENTOS} />)
+
+      expect(screen.getByText('Descuento')).toBeInTheDocument()
+      expect(screen.getByText('-67,50 €')).toBeInTheDocument()
+    })
+
+    it('no muestra ningún motivo cuando no hay descuento', () => {
+      render(<BudgetSummary budget={PRESUPUESTO_COMPLETO} />)
+
+      expect(screen.queryByText(/Pack de/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Permanencia de/)).not.toBeInTheDocument()
+    })
+
+    it('muestra la fila del descuento aunque no lleve ningún motivo', () => {
+      /*
+       * El caso que producía la Fase 4: un bloque con descuento y sin lista de
+       * motivos. No puede ocurrir con `calculateBudget` —el importe **es** la
+       * suma de los motivos—, pero este componente recibe un presupuesto ya
+       * calculado y no debe quedarse en blanco por un dato incompleto: muestra
+       * lo que sabe.
+       */
+      render(
+        <BudgetSummary
+          budget={{
+            oneTime: bloque(250_000, 17_500, 12_500),
+            monthly: VACIO,
+            yearly: VACIO,
+          }}
+        />,
+      )
+
+      expect(screen.getByText('Descuento')).toBeInTheDocument()
+      expect(screen.getByText('-125,00 €')).toBeInTheDocument()
+    })
+
+    it('muestra el ajuste del tope sin signo, porque devuelve dinero', () => {
+      /*
+       * El ajuste del tope es el único descuento con importe negativo: recorta
+       * lo descontado en lugar de descontar. Con la misma regla de pantalla que
+       * los demás —el importe se muestra en negativo— un ajuste de −100,00 €
+       * sale como «100,00 €», sin signo. Y entonces la columna suma a la vista:
+       *
+       *   -150,00 € + -150,00 € + 100,00 € = -200,00 €
+       *
+       * Con las reglas actuales esta fila no aparece nunca en producción: el
+       * máximo que se junta en un bloque es el 15 %. Está probada porque el
+       * código tiene que decidirlo igual.
+       */
+      render(
+        <BudgetSummary
+          budget={{
+            oneTime: bloque(80_000, 5_600, 20_000, [
+              {
+                id: 'prueba-a',
+                label: 'Descuento de prueba',
+                amountCents: 15_000,
+              },
+              {
+                id: 'cap',
+                label: 'Tope del 20 % del subtotal',
+                amountCents: -10_000,
+              },
+            ]),
+            monthly: VACIO,
+            yearly: VACIO,
+          }}
+        />,
+      )
+
+      expect(screen.getByText('Tope del 20 % del subtotal')).toBeInTheDocument()
+      expect(screen.getByText('100,00 €')).toBeInTheDocument()
+      expect(screen.getByText('-150,00 €')).toBeInTheDocument()
     })
   })
 })

@@ -15,6 +15,9 @@ import { calculateFirstPaymentCents } from './calculateFirstPaymentCents'
 const bloque = (taxableBaseCents: number, igicCents: number): PaymentBlock => ({
   subtotalCents: taxableBaseCents,
   discountCents: 0,
+  // El campo de los motivos llega en la Fase 6. Esta función no lo mira: suma
+  // los totales de los tres bloques, y un total ya lleva su descuento dentro.
+  discounts: [],
   taxableBaseCents,
   igicCents,
   totalCents: taxableBaseCents + igicCents,

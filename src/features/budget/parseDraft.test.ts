@@ -11,7 +11,7 @@ import type {
   Service,
   YearlyService,
 } from '../../shared/types/service'
-import { isMonthlyLine } from './isMonthlyLine'
+import { isMonthlyLine } from '../../shared/utils/isMonthlyLine'
 import { parseDraft } from './parseDraft'
 
 /*

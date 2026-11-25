@@ -1,5 +1,5 @@
 import { createBudgetLine } from '../features/budget/createBudgetLine'
-import { isMonthlyLine } from '../features/budget/isMonthlyLine'
+import { isMonthlyLine } from '../shared/utils/isMonthlyLine'
 import type { BudgetLine } from '../shared/types/budget'
 import type { Service } from '../shared/types/service'
 

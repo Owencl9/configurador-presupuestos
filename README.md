@@ -10,14 +10,15 @@ Trabajo Final de Máster — Máster en Desarrollo con Inteligencia Artificial
 
 **🔗 Aplicación en funcionamiento: https://configurador-presupuestos.vercel.app**
 
-> **Estado: en desarrollo (Fase 5 de 11 completada).** La aplicación ya está
+> **Estado: en desarrollo (Fase 6 de 11 completada).** La aplicación ya está
 > desplegada y se actualiza automáticamente con cada `push`. **El presupuesto
 > funciona de principio a fin**: se añaden servicios del catálogo, se eligen la
 > cantidad y los meses respetando los mínimos de cada servicio, y el resumen se
 > actualiza al instante con el pago inicial, la cuota mensual y el pago anual,
-> cada uno con su base imponible, su IGIC al 7 % y su total. **El presupuesto en
-> curso se guarda en el navegador** y sigue ahí al volver. Lo que falta son los
-> descuentos (Fase 6) y el documento imprimible para el cliente (Fase 7).
+> cada uno con sus descuentos —**explicando el motivo de cada uno**—, su base
+> imponible, su IGIC al 7 % y su total. **El presupuesto en curso se guarda en el
+> navegador** y sigue ahí al volver. Lo que falta es el documento imprimible para
+> el cliente (Fase 7).
 
 > ### ⚠️ Los precios son ficticios
 >
@@ -94,8 +95,9 @@ específico de cada funcionalidad en su propia carpeta.
     │   ├── components/     Componentes reutilizables (ServiceCard, QuantitySelector)
     │   ├── constants/      Reglas de negocio y sus valores (IGIC, descuentos, límites)
     │   ├── data/           Catálogo de servicios (archivo de datos editable)
+    │   ├── strategies/     Una regla de descuento por archivo, y el calculador que las combina
     │   ├── types/          Tipos de TypeScript del dominio
-    │   └── utils/          Utilidades compartidas (importes, normalización, localStorage)
+    │   └── utils/          Utilidades compartidas (importes, porcentajes, normalización, localStorage)
     └── test/               Configuración común de los tests
 ```
 
@@ -142,6 +144,24 @@ un total único: tiene tres, porque un pago inicial, una cuota mensual y una
 cuota anual se pagan en momentos distintos y sumarlos daría un importe que el
 cliente no paga nunca.
 
+Los **tres descuentos** son una regla por archivo, con el patrón Strategy
+([ADR 0004](docs/adr/0004-strategy-para-descuentos.md)): pack del 5 % con tres
+servicios distintos, permanencia del 10 % sobre las líneas mensuales de doce
+meses o más, e importe del 5 % cuando el pago inicial supera los 3.000 €.
+Añadir una regla es añadir un archivo y registrarlo, sin tocar las demás.
+
+Los de un mismo bloque **se suman y no se encadenan**, los umbrales se evalúan
+sobre el subtotal **antes** de descontar nada, y el tope del 20 % se aplica a
+cada bloque al final —truncado, no redondeado, porque un tope que se puede
+superar no es un tope—. Cada descuento llega al resumen **con su motivo**, que
+construye la propia regla a partir de las constantes: cambiar un porcentaje
+cambia el cálculo y el texto de la pantalla a la vez. Razonado en el
+[ADR 0010](docs/adr/0010-como-se-aplican-los-descuentos.md).
+
+Lo que el presupuesto **no** muestra es el compromiso total de los servicios
+mensuales (meses × cuota): sería una cuarta cifra confundible con un total, y
+encima parcial ([ADR 0011](docs/adr/0011-sin-compromiso-total.md)).
+
 Todo el dinero se calcula con **enteros en céntimos**
 ([ADR 0003](docs/adr/0003-dinero-en-centimos.md)) y solo se convierte a euros al
 mostrarlo. El IGIC se redondea al céntimo más cercano, una sola vez por bloque
@@ -185,10 +205,13 @@ funciona igual, simplemente sin borradores. Razonado en el
 - ✅ Borrador guardado en el navegador, validado al recuperarlo, y botón para
   empezar de nuevo con confirmación
   ([ADR 0009](docs/adr/0009-borradores-en-localstorage.md))
+- ✅ Descuentos por pack, permanencia e importe, con tope del 20 % por bloque,
+  **cada uno con su motivo explicado en el resumen**, y una pista bajo el
+  selector de meses que dice qué se gana contratando doce
+  ([ADR 0010](docs/adr/0010-como-se-aplican-los-descuentos.md))
 
 ### Previstas
 
-- Descuentos por pack, permanencia e importe, con tope máximo del 20 %
 - Datos del cliente, número de presupuesto y validez
 - Vista imprimible del presupuesto, para guardar como PDF desde el navegador
 
@@ -219,8 +242,14 @@ cabecera que puede dejar la página en blanco si se escribe mal.
 ## Metodología
 
 - **TDD** en toda la lógica de negocio: primero el test, se comprueba que falla,
-  después la implementación mínima y por último la refactorización. **300 tests
-  en verde** al cerrar la Fase 5.
+  después la implementación mínima y por último la refactorización. **388 tests
+  en verde** al cerrar la Fase 6.
+- **Una comprobación en verde no cuenta hasta que se demuestra que puede ponerse
+  en rojo.** Las búsquedas de seguridad llevan un control positivo —buscar algo
+  que se sabe que existe— y los tests que pasan a la primera se verifican
+  cambiando la regla que dicen comprobar, para ver si fallan. En la Fase 6 se
+  hizo con los tests de integración de los descuentos: subiendo el mínimo de
+  permanencia a 13 meses, 4 de los 5 se pusieron en rojo.
 - **Los datos que no son de fiar se validan en la frontera**: lo que llega de
   `localStorage` pasa por una función pura que lo comprueba antes de que ningún
   componente lo vea. Las funciones que tocan el navegador no pueden lanzar.

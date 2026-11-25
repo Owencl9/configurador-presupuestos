@@ -35,14 +35,17 @@ export const IGIC_RATE_PERCENT = 7
 /* -----------------------------------------------------------------------------
  * Descuentos
  *
- * Los tres descuentos y su tope están **registrados pero no implementados**.
- * Son la Fase 6, con el patrón Strategy
+ * **Implementados en la Fase 6** con el patrón Strategy
  * ([ADR 0004](../../../docs/adr/0004-strategy-para-descuentos.md)): una
- * estrategia por regla y un calculador que las combina y aplica el tope.
+ * estrategia por regla en `shared/strategies/`, y un calculador que las combina
+ * y aplica el tope. Cómo se combinan está en el
+ * [ADR 0010](../../../docs/adr/0010-como-se-aplican-los-descuentos.md).
  *
- * Están aquí desde la Fase 3 por una razón práctica: así la regla y su valor
- * nacen en el mismo sitio, y la Fase 6 implementa comportamiento sin tener que
- * decidir además cuánto vale cada cosa.
+ * Los valores están aquí desde la Fase 3, y resultó ser una buena decisión: la
+ * Fase 6 implementó comportamiento sin tener que decidir además cuánto valía
+ * cada cosa. **Cambiar cualquiera de estos números cambia el cálculo y los
+ * textos de la pantalla a la vez**, porque los motivos que se muestran en el
+ * resumen se construyen con ellos.
  * -------------------------------------------------------------------------- */
 
 /** Servicios **distintos** que debe haber en el presupuesto para que sea un pack. */

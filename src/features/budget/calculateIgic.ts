@@ -1,8 +1,24 @@
+import { calculatePercentCents } from '../../shared/utils/calculatePercentCents'
+
 /**
  * Calcula el IGIC de una base imponible y lo devuelve **redondeado a céntimos
  * enteros**.
  *
- * Las tres decisiones que hay en esta única línea están razonadas en
+ * **El cálculo no está aquí.** Hasta la Fase 6 esta función era
+ * `Math.round((baseCents * ratePercent) / 100)`, y entonces era el único sitio
+ * del proyecto que calculaba un porcentaje de dinero. Los descuentos de la
+ * Fase 6 necesitan exactamente la misma operación con el mismo redondeo, así
+ * que se extrajo a `calculatePercentCents` con sus propios tests y esta pasó a
+ * llamarla. **Las nueve comprobaciones de `calculateIgic.test.ts` siguieron en
+ * verde sin tocar ninguna.** Es el mismo movimiento que hizo la Fase 4 con
+ * `calculateLineAmountCents`: una sola fuente del cálculo en cuanto aparece el
+ * segundo sitio que lo necesita.
+ *
+ * Lo que esta función sigue aportando es **el nombre de la regla**: el IGIC es
+ * un impuesto sobre una base imponible, y eso no es lo mismo que un porcentaje
+ * cualquiera, aunque la aritmética coincida.
+ *
+ * Las tres decisiones del redondeo están razonadas en
  * [ADR 0007](../../../docs/adr/0007-redondeo-del-igic.md). En resumen:
  *
  * 1. **Multiplicar por el porcentaje entero y dividir al final.** `base * 7`
@@ -25,6 +41,10 @@
  *    línea. Quien garantiza que esto se cumple es `calculateBudget`, que llama
  *    a esta función una sola vez por forma de pago.
  *
+ * Y una cuarta, que es de la Fase 6: el IGIC se calcula sobre la base **ya
+ * rebajada por los descuentos**. Quien garantiza el orden sigue siendo
+ * `calculateBudget`.
+ *
  * Aviso para quien reutilice la función: `Math.round(-3.5)` devuelve `-3`, no
  * `-4`; redondea hacia el infinito positivo, no alejándose del cero. No afecta
  * al presupuesto, porque la base imponible nunca es negativa —los descuentos se
@@ -40,5 +60,5 @@
  *   real sale de `IGIC_RATE_PERCENT` y lo pasa `calculateBudget`.
  */
 export function calculateIgic(baseCents: number, ratePercent: number): number {
-  return Math.round((baseCents * ratePercent) / 100)
+  return calculatePercentCents(baseCents, ratePercent)
 }

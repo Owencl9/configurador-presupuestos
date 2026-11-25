@@ -45,6 +45,10 @@ const avisos = {
   onRemove: vi.fn(),
 }
 
+/** El campo de meses de la línea, por su nombre accesible. */
+const campoDeMeses = (servicio = 'SEO Básico') =>
+  screen.getByRole('spinbutton', { name: `Meses de ${servicio}` })
+
 describe('BudgetLineItem', () => {
   it('muestra el nombre del servicio y su precio unitario con el sufijo', () => {
     /*
@@ -178,6 +182,69 @@ describe('BudgetLineItem', () => {
       await user.click(boton)
 
       expect(onRemove).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  /* ---------------------------------------------------------------------------
+   * La pista del descuento por permanencia (Fase 6, pendiente nº 18).
+   *
+   * El usuario la pidió después de probar la Fase 5: cambiar los meses no movía
+   * ningún importe y la pantalla no explicaba por qué el campo estaba ahí.
+   * ------------------------------------------------------------------------ */
+  describe('la pista del descuento por permanencia', () => {
+    it('invita al descuento cuando faltan meses', () => {
+      const linea: BudgetLine = { service: SEO, quantity: 1, months: 6 }
+      render(<BudgetLineItem line={linea} {...avisos} />)
+
+      expect(
+        screen.getByText('Desde 12 meses: 10 % de descuento'),
+      ).toBeInTheDocument()
+    })
+
+    it('confirma el descuento cuando se cumple la permanencia', () => {
+      const linea: BudgetLine = { service: SEO, quantity: 1, months: 12 }
+      render(<BudgetLineItem line={linea} {...avisos} />)
+
+      expect(
+        screen.getByText('Descuento por permanencia aplicado'),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText('Desde 12 meses: 10 % de descuento'),
+      ).not.toBeInTheDocument()
+    })
+
+    it('la asocia al campo de los meses, no al de la cantidad', () => {
+      /*
+       * La pista explica para qué sirven **los meses**. Colgada del campo de
+       * cantidad, un lector de pantalla anunciaría el descuento por permanencia
+       * al entrar en un campo que no tiene nada que ver con él.
+       */
+      const linea: BudgetLine = { service: SEO, quantity: 1, months: 12 }
+      render(<BudgetLineItem line={linea} {...avisos} />)
+
+      expect(campoDeMeses()).toHaveAccessibleDescription(
+        'Entre 6 y 36 meses Descuento por permanencia aplicado',
+      )
+      expect(
+        screen.getByRole('spinbutton', { name: 'Cantidad de SEO Básico' }),
+      ).toHaveAccessibleDescription('Entre 1 y 99 unidades')
+    })
+
+    it('no aparece en una línea de pago único ni en una anual', () => {
+      // No hay selector de meses, así que tampoco hay nada que explicar.
+      const web: BudgetLine = { service: WEB, quantity: 1 }
+      const { unmount } = render(<BudgetLineItem line={web} {...avisos} />)
+
+      expect(screen.queryByText(/permanencia/i)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Desde 12 meses/)).not.toBeInTheDocument()
+
+      unmount()
+
+      const hosting: BudgetLine = { service: HOSTING, quantity: 1 }
+      render(<BudgetLineItem line={hosting} {...avisos} />)
+
+      expect(screen.queryByText(/permanencia/i)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Desde 12 meses/)).not.toBeInTheDocument()
     })
   })
 })

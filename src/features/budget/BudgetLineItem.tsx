@@ -6,8 +6,9 @@ import {
 } from '../../shared/constants/business-rules'
 import type { BudgetLine } from '../../shared/types/budget'
 import { buildAmountLabel } from '../../shared/utils/buildAmountLabel'
-import { calculateLineAmountCents } from './calculateLineAmountCents'
-import { isMonthlyLine } from './isMonthlyLine'
+import { calculateLineAmountCents } from '../../shared/utils/calculateLineAmountCents'
+import { isMonthlyLine } from '../../shared/utils/isMonthlyLine'
+import { buildCommitmentHint } from './buildCommitmentHint'
 
 export interface BudgetLineItemProps {
   /** La línea que se muestra. */
@@ -39,6 +40,20 @@ export interface BudgetLineItemProps {
  * Los límites de los selectores vienen de `business-rules.ts`, salvo el mínimo
  * de meses, que es el `minMonths` **del propio servicio**: 6 en los de SEO y 3
  * en los de mantenimiento.
+ *
+ * ## La pista del selector de meses (Fase 6)
+ *
+ * Bajo el selector de meses hay una pista que explica el descuento por
+ * permanencia —«Desde 12 meses: 10 % de descuento», o «Descuento por
+ * permanencia aplicado» cuando ya se cumple—, asociada al campo igual que su
+ * rango. La pidió el usuario después de probar la Fase 5: cambiar los meses no
+ * movía ningún importe y nada en pantalla decía para qué servía el campo
+ * (pendiente nº 18 de PROGRESO.md).
+ *
+ * El texto lo decide `buildCommitmentHint`, que comparte la condición con la
+ * estrategia que concede el descuento. Aquí no hay ninguna comparación de
+ * meses: si la hubiera, habría dos versiones de la misma regla y la pantalla
+ * podría anunciar un descuento que el presupuesto no lleva.
  */
 export function BudgetLineItem({
   line,
@@ -99,6 +114,13 @@ export function BudgetLineItem({
             value={line.months}
             min={line.service.minMonths}
             max={MAX_MONTHS}
+            /* La pista del descuento por permanencia (pendiente nº 18). El
+               texto lo decide `buildCommitmentHint`, que comparte la condición
+               con la estrategia que concede el descuento: así la pantalla no
+               puede anunciar un descuento que el presupuesto no lleva.
+               `?? undefined` porque aquí la línea siempre es mensual y la
+               función nunca devuelve `null`, pero su tipo lo admite. */
+            hint={buildCommitmentHint(line) ?? undefined}
             onChange={onMonthsChange}
           />
         )}

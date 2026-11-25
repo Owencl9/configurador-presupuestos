@@ -1,12 +1,12 @@
 # Estado del desarrollo
 
-**Última actualización:** 24/11/2026
-**Fase actual:** **Fase 5 completada**. El estado del presupuesto vive en un
-Context con `useReducer`, y el presupuesto en curso se guarda como borrador en
-`localStorage`: sobrevive a recargar la página, no guarda ni precios ni nombres
-ni datos personales, y valida todo lo que lee. 300 tests en verde. Probado en el
-navegador por el usuario, en pantalla ancha y en móvil, y **verificado en
-producción** (commit `fd89b2d`).
+**Última actualización:** 25/11/2026
+**Fase actual:** **Fase 6 completada**. Los tres descuentos —pack, permanencia e
+importe— están implementados con el patrón Strategy, con el tope del 20 % por
+bloque, y el resumen explica **el motivo de cada uno**. Bajo el selector de meses
+hay una pista que dice qué se gana contratando doce. 388 tests en verde. Probado
+en el navegador por el usuario con los tres ejemplos que calculó a mano.
+**Pendiente la verificación en producción.**
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**privado** hasta la Fase 10)
 **Aplicación desplegada:** https://configurador-presupuestos.vercel.app
@@ -26,7 +26,7 @@ producción** (commit `fd89b2d`).
 | 3    | Lógica de negocio con TDD: formato de euros, subtotales, IGIC                | ✅ cerrada 24/11/2026 |
 | 4    | Componentes del presupuesto con TDD                                          | ✅ cerrada 24/11/2026 |
 | 5    | Estado con Context + useReducer y borradores en localStorage                 | ✅ cerrada 24/11/2026 |
-| 6    | Descuentos con patrón Strategy                                               | pendiente             |
+| 6    | Descuentos con patrón Strategy                                               | ✅ cerrada 25/11/2026 |
 | 7    | Formulario de cliente y documento imprimible                                 | pendiente             |
 | 8    | Tests E2E con Playwright                                                     | pendiente             |
 | 9    | Calidad: accesibilidad, cobertura, Husky, GitHub Actions                     | pendiente             |
@@ -346,10 +346,10 @@ enteros.
 | Regla                 | Valor confirmado                          | Implementada |
 | --------------------- | ----------------------------------------- | ------------ |
 | IGIC                  | 7 %, configurable                         | ✅ Fase 3    |
-| Descuento por pack    | 3 servicios distintos → 5 % del subtotal  | Fase 6       |
-| Descuento permanencia | 12 meses o más → 10 % de esos servicios   | Fase 6       |
-| Descuento por importe | pago único > 3.000 € → 5 % del pago único | Fase 6       |
-| Tope de descuento     | 20 % como máximo                          | Fase 6       |
+| Descuento por pack    | 3 servicios distintos → 5 % del subtotal  | ✅ Fase 6    |
+| Descuento permanencia | 12 meses o más → 10 % de esos servicios   | ✅ Fase 6    |
+| Descuento por importe | pago único > 3.000 € → 5 % del pago único | ✅ Fase 6    |
+| Tope de descuento     | 20 % como máximo                          | ✅ Fase 6    |
 
 Los precios del catálogo **no cambian**: siguen siendo los 12 servicios de la
 Fase 2, con sus importes ficticios. El usuario confirmó las reglas, no los
@@ -1008,29 +1008,277 @@ problema **P9** de la Fase 2 con otra forma.
 
 ---
 
+## Completado en la Fase 6
+
+### Los descuentos, con una estrategia por regla
+
+Cuatro archivos nuevos en `src/shared/strategies/` y ni un condicional encadenado:
+
+| Archivo                 | Qué decide                                                      | Tests |
+| ----------------------- | --------------------------------------------------------------- | ----- |
+| `discountStrategy.ts`   | La forma de una estrategia: tipos y las tres claves de bloque   | —     |
+| `packDiscount.ts`       | 3 servicios distintos → 5 % en **cada uno** de los tres bloques | 11    |
+| `commitmentDiscount.ts` | 10 % de las líneas mensuales de 12 meses o más                  | 13    |
+| `amountDiscount.ts`     | 5 % del pago inicial si supera 3.000 € (**estrictamente**)      | 7     |
+| `calculateDiscounts.ts` | Agrupa por bloque, suma y aplica el tope                        | 16    |
+
+Añadir una regla de descuento es **añadir un archivo y registrarlo** en una
+lista, sin tocar las demás ni el calculador. Es la ventaja concreta por la que el
+[ADR 0004](docs/adr/0004-strategy-para-descuentos.md) eligió el patrón en la
+Fase 1, y en esta fase se ha podido comprobar.
+
+### Las cinco decisiones que la especificación no contestaba
+
+Resuelven el pendiente nº 11 y están razonadas en el
+[ADR 0010](docs/adr/0010-como-se-aplican-los-descuentos.md):
+
+| Pregunta                                           | Decisión del usuario                                                          |
+| -------------------------------------------------- | ----------------------------------------------------------------------------- |
+| ¿A qué subtotal se aplica el pack, si hay tres?    | A **los tres**, con la condición evaluada sobre todo el presupuesto           |
+| ¿Qué cuenta como «3 servicios distintos»?          | Servicios por identificador. **Tres unidades de la misma web no son un pack** |
+| ¿Se suman los descuentos o se encadenan?           | **Se suman**, siempre sobre el subtotal                                       |
+| ¿Los umbrales, antes o después de descontar?       | **Antes**, sobre el subtotal sin tocar                                        |
+| ¿El tope del 20 % es del presupuesto o del bloque? | **De cada bloque**, y se aplica al final                                      |
+
+Sumar en lugar de encadenar no es un detalle: en la cuota mensual del ejemplo del
+usuario son **2,25 €** de diferencia (67,50 € sumados frente a 65,25 €
+encadenados). Y tiene una propiedad que encadenar no tiene: **el resultado no
+depende del orden** en que se ejecuten las estrategias.
+
+### Dónde se redondea cada cosa
+
+| Qué              | Cómo                                        | Por qué                                                                                 |
+| ---------------- | ------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Cada descuento   | `calculatePercentCents`, redondeo comercial | La misma función y la misma regla que el IGIC: **un solo redondeo en todo el proyecto** |
+| El tope del 20 % | `Math.floor`, **truncado**                  | El 20 % de 9,99 € son 1,998 €: redondeando daría 2,00 €, que es **más del 20 %**        |
+
+**Un redondeo por estrategia y por bloque**, no uno al final sobre la suma. El
+motivo es de pantalla: el resumen muestra cada descuento con su importe, así que
+cada uno tiene que ser un entero de céntimos y **la suma de lo que se ve tiene
+que ser exactamente lo que se resta**. La diferencia entre las dos formas es
+real y está fijada con un test: con un pago inicial de 3.000,10 € son 300,02 €
+redondeando por separado y 300,01 € redondeando la suma.
+
+### Un solo sitio que calcula porcentajes
+
+`shared/utils/calculatePercentCents.ts`, con 10 tests. `calculateIgic` pasó a
+llamarla y **sus nueve comprobaciones siguieron en verde sin tocar ninguna**: los
+mismos tests contra una implementación distinta, igual que ocurrió con
+`buildPriceLabel` en la Fase 3 y con `calculateSubtotals` en la Fase 4.
+
+Es el tercer caso del proyecto del mismo movimiento: en cuanto aparece el segundo
+sitio que necesita una operación, la operación se extrae con sus tests.
+
+### El motivo de cada descuento (pendiente nº 18, segunda parte)
+
+`PaymentBlock` gana `discounts`, una lista de `AppliedDiscount` con
+identificador, motivo e importe. Dos decisiones que la sostienen:
+
+- **`discountCents` es la suma de `discounts`**, no un cálculo aparte. No son dos
+  números que haya que mantener de acuerdo, es uno, y hay un test que comprueba
+  la igualdad en los tres bloques.
+- **Cada estrategia construye su propio motivo** leyendo las constantes, así que
+  cambiar `PACK_DISCOUNT_PERCENT` cambia el cálculo y el rótulo de la pantalla a
+  la vez. Un texto escrito a mano seguiría diciendo «5 %» con la regla al 8 %.
+
+En el resumen, la fila «Descuento» de la Fase 4 **se conserva** y debajo va una
+fila por motivo. Con un solo descuento las dos muestran la misma cifra: decisión
+del usuario después de verlo en el navegador, porque así los tres bloques tienen
+el mismo desglose y el motivo se ve siempre.
+
+### La pista del selector de meses (pendiente nº 18, primera parte)
+
+El problema que el usuario detectó al probar la Fase 5: cambiar los meses no
+movía ningún importe —la cuota es la de un mes, y es correcto— y **nada en
+pantalla decía para qué servía el campo**.
+
+Ahora, bajo el selector: «Desde 12 meses: 10 % de descuento», que pasa a
+«Descuento por permanencia aplicado» al llegar. La decide
+`buildCommitmentHint`, que comparte la condición con la estrategia que concede el
+descuento: **la pantalla no puede anunciar un descuento que el presupuesto no
+lleva**, y hay un test que recorre los 36 meses posibles comprobando que las dos
+coinciden.
+
+La pista va **en el texto asociado al campo** (`aria-describedby`), junto al
+rango, no en una región que se anuncie sola. Decisión del usuario: así se lee al
+entrar en el campo y la frase de estado del panel se queda corta, como la dejó la
+Fase 4.
+
+### El tope del 20 %, probado sin poder provocarlo
+
+Con las reglas actuales **el tope no se alcanza nunca**: lo máximo que se junta en
+un bloque es el 15 % (pack más permanencia en la cuota mensual). Se prueba
+inyectando **estrategias de prueba** en el calculador, que admite una lista
+distinta de la de producción por el mismo motivo que `calculateBudget` admite
+otro tipo de IGIC desde la Fase 3.
+
+Cuando el tope recorta, los descuentos conservan su importe y se añade una fila
+de ajuste **negativa** («Tope del 20 % del subtotal»), así que ninguna etiqueta
+miente y la columna suma a la vista. Decisión del usuario entre dos opciones.
+
+Y hay un test que comprueba que **con las reglas reales el ajuste no aparece**.
+El día que alguien suba un porcentaje, ese test falla: es el aviso de que el tope
+empieza a morder en presupuestos reales.
+
+### Sin compromiso total (pendiente nº 19)
+
+No se muestra meses × cuota. Razonado en el
+[ADR 0011](docs/adr/0011-sin-compromiso-total.md), con el criterio del
+[ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md): **una cifra de
+dinero en pantalla tiene que responder a una pregunta con respuesta exacta.**
+«¿Cuánto pagas cada mes?» la tiene; «¿cuánto te cuesta el compromiso?» depende de
+doce meses de futuro, y además no incluiría ni el pago inicial ni el anual.
+
+### Los descuentos no se guardan
+
+Se calculan siempre. El borrador de `localStorage` sigue siendo el de la Fase 5
+—identificador, cantidad y meses, y nada más—, y hay un test de integración que
+lo comprueba sobre el contenido real del almacenamiento después de montar el
+presupuesto del ejemplo 1. Un descuento guardado sería un importe editable desde
+el navegador, que es justo lo que el
+[ADR 0009](docs/adr/0009-borradores-en-localstorage.md) decidió evitar.
+
+### Dos archivos cambiados de carpeta
+
+`isMonthlyLine` y `calculateLineAmountCents` pasan de `features/budget/` a
+`shared/utils/`, con `git mv` y **sin tocar su cuerpo ni sus tests**. Las
+estrategias viven en `shared/` y las necesitan, y una carpeta de `shared/` no
+puede depender de una funcionalidad (apartado 6 de `CLAUDE.md`).
+
+No estaba previsto en el plan de la fase: es la desviación **D1** del registro,
+aprobada por el usuario en la parada del ciclo 6. `isMonthlyLine`, además, ya la
+importaba el reducer desde `context/` desde la Fase 5, así que llevaba una fase
+mal colocada.
+
+### Documentación
+
+- [ADR 0010](docs/adr/0010-como-se-aplican-los-descuentos.md): cómo se aplican
+  los descuentos —por bloque, sumados, umbrales sobre el subtotal y tope
+  truncado— y dónde se redondea cada uno.
+- [ADR 0011](docs/adr/0011-sin-compromiso-total.md): por qué no se muestra el
+  compromiso total de los servicios mensuales.
+- `docs/prompts/fase-06.md` con el registro de la fase, las dos desviaciones y el
+  control positivo del ciclo 9.
+
+---
+
+## Verificaciones de la Fase 6
+
+| Comprobación                           | Resultado                                                                     |
+| -------------------------------------- | ----------------------------------------------------------------------------- |
+| `npm run format:check`                 | en verde (tras formatear los archivos nuevos)                                 |
+| `npm run lint`                         | código de salida 0, sin ni una línea de salida                                |
+| `npm test`                             | **388 de 388 en verde** (300 anteriores + 88 nuevos)                          |
+| `tsc -b`                               | código de salida 0                                                            |
+| `npm run build`                        | correcto — 239,19 kB de JS (74,72 kB comprimido), 14,53 kB de CSS             |
+| Probado en el navegador por el usuario | los tres ejemplos calculados a mano, más el caso de 11 meses, cifra por cifra |
+
+**Ocho ciclos rojo-verde completos y uno que no pudo serlo.** Cinco con el fallo
+de importe sin resolver (0 tests ejecutados) y tres con fallos de aserción: 7 en
+`calculateBudget`, 2 en el resumen y 5 en los dos componentes del selector.
+
+**El ciclo 9 pasó a la primera, y se le hizo un control positivo.** Sus cinco
+tests de integración describen un comportamiento que los ciclos 6 a 8 ya habían
+implementado, así que no podían fallar. Se subió
+`COMMITMENT_DISCOUNT_MIN_MONTHS` de 12 a 13 y **4 de los 5 se pusieron en rojo**;
+el quinto siguió verde, correctamente, porque es el del borrador y no depende de
+ninguna regla de descuento. Después se devolvió la constante y se comprobó con
+`git diff --stat`, que no devuelve nada para ese archivo. Es la quinta aparición
+de la familia de problemas del proyecto, y la primera **sin ningún síntoma**.
+
+No se ha instalado ninguna dependencia nueva, así que `npm audit` no cambia
+respecto a la Fase 1.
+
+### Revisión de secretos (ejecutada al final, después de la documentación)
+
+Nueve categorías de datos, **cada una con su control positivo**: la misma
+búsqueda, con la misma herramienta, encontrando además algo que se sabe que
+existe. Sin esa pareja, un «sin coincidencias» no distingue entre «no hay nada»
+y «esto no está buscando» (problema **P9** de la Fase 2).
+
+| Categoría                                                                                                             | Resultado                                                                                                                      | Control que valida la búsqueda                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| Direcciones de correo (expresión genérica)                                                                            | solo la `@users.noreply.github.com` intencionada                                                                               | las encontró                                                                                                           |
+| Rutas con el nombre de usuario de Windows                                                                             | ninguna en los archivos de este commit                                                                                         | encontró las de `docs/fase-00-*`, que son el pendiente nº 17                                                           |
+| Claves, tokens y contraseñas                                                                                          | ninguna; solo la palabra, en las normas                                                                                        | encontró esas menciones                                                                                                |
+| Datos de terceros                                                                                                     | ninguno                                                                                                                        | encontró «BIG School», que es la formación del autor                                                                   |
+| **Nombre de la agencia e identificador del correo personal** del usuario, que los aportó en el momento de la revisión | **0 coincidencias**, ni en los archivos ni en el historial                                                                     | `Owencl9` en los archivos, y la misma orden de `git grep` sobre todos los árboles del historial sí devuelve resultados |
+| Direcciones IP                                                                                                        | ninguna                                                                                                                        | encontró `localhost`                                                                                                   |
+| Teléfonos                                                                                                             | ninguno; la única secuencia de nueve dígitos es el identificador de GitHub de la dirección `noreply`                           | encontró esa secuencia                                                                                                 |
+| URL con credenciales, del tipo `esquema://usuario:clave@`                                                             | ninguna. **La única coincidencia de todo el repositorio es el ejemplo de esta misma celda**, escrito al documentar la revisión | se valida sola: ese ejemplo es a la vez la descripción de la categoría y el control positivo de su búsqueda            |
+| Proveedores de correo personal                                                                                        | 0 en 0 archivos                                                                                                                | la misma expresión con la `noreply` la encuentra                                                                       |
+
+Los términos de las dos últimas filas y de la quinta **los aporta el usuario en
+el momento de ejecutar la revisión y no se escriben en el repositorio**: son
+precisamente los datos que no deben aparecer (pendiente nº 15 y corrección
+C4-11). Aquí se describen, no se reproducen, que es la norma del apartado 5 de
+`CLAUDE.md`.
+
+**Dos barridos hubo que repetirlos, y no por un falso negativo.** Las búsquedas
+que llevaban el control dentro de la misma expresión devolvieron resultados
+**paginados**, y en una lista cortada a quince líneas una coincidencia sensible
+puede quedarse debajo del corte. Se repitieron sin el término de control y
+contando archivos, de modo que cualquier salida fuese un hallazgo real. Es el
+mismo problema **P9** visto desde el otro lado: no que la búsqueda no lea el
+contenido, sino que no deje ver todo lo que ha leído.
+
+**El historial se revisó también**, en tres sitios distintos: el contenido de
+todos los árboles (`git grep` sobre `git rev-list --all`), los mensajes de los
+**12** commits y las firmas. Las identidades del historial son **una sola**, la
+del correo `noreply`, como autor y como committer en los 12.
+
+Y esta tabla **se escribió antes de volver a revisar el archivo que la
+contiene**: documentar una revisión de datos personales es una forma habitual de
+reintroducirlos, así que `PROGRESO.md` pasó otra vez por las nueve categorías
+después de añadirla. Es la corrección **C2-5** de la Fase 2 —una revisión
+describe un contenido concreto, y editar algo después la invalida— aplicada a su
+propia documentación.
+
+### Los tests anteriores que cambiaron, y por qué
+
+El usuario pidió explicar cada uno. Son cuatro, todos en
+`calculateBudget.test.ts`, y **ninguno fuera de ese archivo**:
+
+| Test                                                        | Qué cambió                                                                                                               |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| «calcula los tres bloques de un presupuesto mixto»          | **Importes.** Tres servicios distintos activan el pack: 2.675 → 2.541,25 €, 267,50 → 254,13 €/mes, 128,40 → 121,98 €/año |
+| «aplica a cada bloque el IGIC de su propia base»            | **Importes.** El IGIC mensual sale ahora de una base con pack: 1.750 → 1.663 céntimos                                    |
+| «devuelve los tres bloques a cero con un presupuesto vacío» | **Forma, no importes.** `toEqual` compara el objeto completo y hay un campo nuevo                                        |
+| «sigue el orden de cálculo del apartado 4.3»                | **Forma, no importes.** Igual que el anterior. **Este no estaba en la lista anunciada** (desviación D2)                  |
+
+Y dos que siguen en verde con un texto corregido: el que se llamaba «no aplica
+ningún descuento **todavía**» —ahora «cuando ninguna regla se cumple»— y el de
+las siete líneas de 0,07 €, donde se ha anotado que **sí** lleva pack y que sus
+dos cifras coinciden por aritmética, no porque el descuento no actúe.
+
+Los 110 tests de la Fase 5, los ocho de integración de la Fase 4 y los del
+catálogo, el formato de euros y la normalización de números **no se han tocado**.
+
+---
+
 ## Pendiente y vigilado
 
-| #   | Asunto                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Cuándo                 |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------- |
-| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos. **El historial ya está revisado** (ver el apartado anterior): no hay que reescribirlo                                                                                                                                                                                                                                                                                                                                                                         | Fase 10                |
-| 2   | El favicon sigue siendo el de Vite                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Fase 11                |
-| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Fase 9                 |
-| 4   | ~~Confirmar con el usuario los precios, el IGIC y las reglas de descuento~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                                                                                                                                                                                                | —                      |
-| 5   | ~~El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx`~~ **resuelto en la Fase 2**                                                                                                                                                                                                                                                                                                                                                                                                                  | —                      |
-| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto                                                                                                                                                                                                                                                                                                                                                                                                                                                 | —                      |
-| 7   | ~~Sustituir la conversión provisional de céntimos a euros de `buildPriceLabel` por el `formatEuros` probado~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                                                                                                                                                              | —                      |
-| 8   | ~~El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto~~ **resuelto en la Fase 4**                                                                                                                                                                                                                                                                                                                                                                                                          | —                      |
-| 9   | ~~**Los meses de contratación no están en `BudgetLine`.** Entran con su selector~~ **resuelto en la Fase 4**: unión discriminada, meses obligatorios en la línea mensual                                                                                                                                                                                                                                                                                                                                                             | —                      |
-| 10  | ~~**Decidir si el resumen muestra «lo que se paga hoy»**~~ **resuelto en la Fase 4**: sí, como línea informativa «A pagar el primer día (orientativo)», fuera del tipo `Budget` ([ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md))                                                                                                                                                                                                                                                                                        | —                      |
-| 11  | **A qué subtotal se aplica el descuento por pack**: a los tres bloques o solo a alguno. La regla dice «el subtotal» y hay tres                                                                                                                                                                                                                                                                                                                                                                                                       | Fase 6                 |
-| 12  | ~~`calculateBudget` es el único punto de entrada del cálculo: los componentes no deben hacer cuentas~~ **cumplido en la Fase 4 y en la Fase 5**: ni el reducer, ni el proveedor, ni `Configurator`, ni el botón de reiniciar hacen una sola cuenta. Sigue vigilado en las fases 6 y 7                                                                                                                                                                                                                                                | Fases 6-7              |
-| 13  | ~~**Añadir al apartado 1 de `CLAUDE.md` la norma de ritmo de la corrección C3-1**~~ **resuelto al abrir la Fase 4**                                                                                                                                                                                                                                                                                                                                                                                                                  | —                      |
-| 14  | **Mejora opcional, solo si sobra tiempo:** resumen fijo en un lateral en pantallas anchas, para no tener que bajar hasta el final para ver los totales. Petición del usuario en la Fase 4. Es maquetación, no cálculo: **se recorta antes que cualquier cosa de la lista del apartado 9 de `CLAUDE.md`**                                                                                                                                                                                                                             | Fase 11, si hay margen |
-| 15  | **Los términos concretos de la revisión de secretos los aporta el usuario** en el momento de ejecutarla: el nombre de su agencia, su dominio y el identificador de su correo personal. No pueden estar escritos en el repositorio, porque son precisamente los datos que no deben aparecer (corrección C4-11)                                                                                                                                                                                                                        | Fase 10                |
-| 16  | **Decidir si los datos del cliente se guardan en el borrador.** El formato actual no guarda ningún dato personal. Un nombre y un correo en `localStorage` son datos personales en un ordenador que puede ser compartido, y el presupuesto funciona igual sin ellos ([ADR 0009](docs/adr/0009-borradores-en-localstorage.md))                                                                                                                                                                                                         | Fase 7                 |
-| 17  | **La ruta absoluta de trabajo, con el nombre de usuario de Windows, sigue en el historial.** Entró en la Fase 1 en `docs/prompts/fase-00.md`; en la Fase 5 se ha sustituido en el archivo actual por `%USERPROFILE%\…`, pero los commits anteriores la conservan. **Decidir en la Fase 10 si se limpia**, sabiendo que limpiarla obliga a reescribir el historial y que el nombre del autor ya es público por la firma de los commits, que es intencionada                                                                           | Fase 10                |
-| 18  | **Nada en pantalla explica para qué sirven los meses.** Al probar la Fase 5, cambiar los meses no mueve ningún importe —es correcto, la cuota es la de un mes— y la pantalla no dice por qué importan. En la Fase 6, con el descuento por permanencia ya implementado: **una pista bajo el selector de meses** de los servicios mensuales, del estilo «Desde 12 meses: 10 % de descuento», y **el motivo de cada descuento en el resumen**, como pide el apartado 4.4 del prompt maestro. Petición del usuario tras probar la Fase 5 | Fase 6                 |
-| 19  | **Decidir si se muestra el compromiso total de los servicios mensuales** (meses × cuota). Quedó aparcado en la Fase 4 —«el compromiso total se deja para más adelante»— y la Fase 6 es su momento, porque es cuando los meses empiezan a cambiar un importe                                                                                                                                                                                                                                                                          | Fase 6                 |
+| #   | Asunto                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Cuándo                 |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos. **El historial ya está revisado** (ver el apartado anterior): no hay que reescribirlo                                                                                                                                                                                                                                                                                                                                            | Fase 10                |
+| 2   | El favicon sigue siendo el de Vite                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Fase 11                |
+| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Fase 9                 |
+| 4   | ~~Confirmar con el usuario los precios, el IGIC y las reglas de descuento~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                                                                                                                                                                   | —                      |
+| 5   | ~~El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx`~~ **resuelto en la Fase 2**                                                                                                                                                                                                                                                                                                                                                                                     | —                      |
+| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto                                                                                                                                                                                                                                                                                                                                                                                                                    | —                      |
+| 7   | ~~Sustituir la conversión provisional de céntimos a euros de `buildPriceLabel` por el `formatEuros` probado~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                                                                                                                                 | —                      |
+| 8   | ~~El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto~~ **resuelto en la Fase 4**                                                                                                                                                                                                                                                                                                                                                                             | —                      |
+| 9   | ~~**Los meses de contratación no están en `BudgetLine`.** Entran con su selector~~ **resuelto en la Fase 4**: unión discriminada, meses obligatorios en la línea mensual                                                                                                                                                                                                                                                                                                                                | —                      |
+| 10  | ~~**Decidir si el resumen muestra «lo que se paga hoy»**~~ **resuelto en la Fase 4**: sí, como línea informativa «A pagar el primer día (orientativo)», fuera del tipo `Budget` ([ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md))                                                                                                                                                                                                                                                           | —                      |
+| 11  | ~~**A qué subtotal se aplica el descuento por pack**~~ **resuelto en la Fase 6**: a los tres bloques, con la condición evaluada sobre todo el presupuesto. Con ella se decidieron otras cuatro cosas que la especificación no contestaba —qué cuenta como servicio distinto, sumar en lugar de encadenar, los umbrales sobre el subtotal sin descontar y el tope por bloque— en el [ADR 0010](docs/adr/0010-como-se-aplican-los-descuentos.md)                                                          | Fase 6                 |
+| 12  | ~~`calculateBudget` es el único punto de entrada del cálculo: los componentes no deben hacer cuentas~~ **cumplido en las fases 4, 5 y 6**: ni el reducer, ni el proveedor, ni `Configurator`, ni el botón de reiniciar, ni el resumen, ni la línea del presupuesto hacen una sola cuenta. En la Fase 6 los descuentos y sus motivos salen de `calculateBudget`, y la pista del selector de meses sale de una función con tests que comparte la condición con la estrategia. Sigue vigilado en la Fase 7 | Fases 6-7              |
+| 13  | ~~**Añadir al apartado 1 de `CLAUDE.md` la norma de ritmo de la corrección C3-1**~~ **resuelto al abrir la Fase 4**                                                                                                                                                                                                                                                                                                                                                                                     | —                      |
+| 14  | **Mejora opcional, solo si sobra tiempo:** resumen fijo en un lateral en pantallas anchas, para no tener que bajar hasta el final para ver los totales. Petición del usuario en la Fase 4. Es maquetación, no cálculo: **se recorta antes que cualquier cosa de la lista del apartado 9 de `CLAUDE.md`**                                                                                                                                                                                                | Fase 11, si hay margen |
+| 15  | **Los términos concretos de la revisión de secretos los aporta el usuario** en el momento de ejecutarla: el nombre de su agencia, su dominio y el identificador de su correo personal. No pueden estar escritos en el repositorio, porque son precisamente los datos que no deben aparecer (corrección C4-11)                                                                                                                                                                                           | Fase 10                |
+| 16  | **Decidir si los datos del cliente se guardan en el borrador.** El formato actual no guarda ningún dato personal. Un nombre y un correo en `localStorage` son datos personales en un ordenador que puede ser compartido, y el presupuesto funciona igual sin ellos ([ADR 0009](docs/adr/0009-borradores-en-localstorage.md))                                                                                                                                                                            | Fase 7                 |
+| 17  | **La ruta absoluta de trabajo, con el nombre de usuario de Windows, sigue en el historial.** Entró en la Fase 1 en `docs/prompts/fase-00.md`; en la Fase 5 se ha sustituido en el archivo actual por `%USERPROFILE%\…`, pero los commits anteriores la conservan. **Decidir en la Fase 10 si se limpia**, sabiendo que limpiarla obliga a reescribir el historial y que el nombre del autor ya es público por la firma de los commits, que es intencionada                                              | Fase 10                |
+| 18  | ~~**Nada en pantalla explica para qué sirven los meses.**~~ **resuelto en la Fase 6**: la pista bajo el selector de meses («Desde 12 meses: 10 % de descuento» → «Descuento por permanencia aplicado»), asociada al campo, y el motivo de cada descuento en el resumen, como pide el apartado 4.4 del prompt maestro. La pista comparte la condición con la estrategia, así que no puede anunciar un descuento que el presupuesto no lleva                                                              | Fase 6                 |
+| 19  | ~~**Decidir si se muestra el compromiso total de los servicios mensuales**~~ **resuelto en la Fase 6**: no se muestra. Sería una cuarta cifra confundible con un total, y encima parcial, porque no incluiría el pago inicial ni el anual ([ADR 0011](docs/adr/0011-sin-compromiso-total.md))                                                                                                                                                                                                           | Fase 6                 |
 
 ### Riesgos abiertos (del inventario de la Fase 0)
 
@@ -1046,71 +1294,77 @@ problema **P9** de la Fase 2 con otra forma.
 
 ## Siguiente paso
 
-**Pendiente inmediato:** que el usuario pruebe el borrador **en el dominio de
-producción**, que tiene un `localStorage` distinto del de `localhost`. Es lo
-único de esta fase que no se puede comprobar desde la terminal: los marcadores
-del código están en el JS publicado, pero que el navegador guarde y recupere en
-ese dominio lo ve quien abre la página.
+**Pendiente inmediato: verificar la Fase 6 en producción**, después del `push`,
+con el mismo procedimiento de las fases anteriores: consultar el SHA remoto al
+servidor con `git ls-remote` —no al caché local de `origin/main`—, comparar los
+tamaños de los recursos publicados con el build local, repasar las cabeceras de
+seguridad y buscar en el JS publicado una pareja de marcadores de control
+positivo y negativo. Los candidatos de esta fase son los motivos de los
+descuentos («Pack de 3 servicios o más», «Permanencia de 12 meses o más»,
+«Tope del 20 % del subtotal») y la pista del selector, que son cadenas literales
+y por tanto sobreviven a la minificación. Como control negativo sirve «Descuento
+de prueba del», que solo existe en los tests.
 
-**Después, Fase 6 — Descuentos con patrón Strategy.** Una estrategia por regla
-—pack, permanencia e importe—, el tope del 20 % y el calculador que las combina,
-con TDD.
+Queda además la comprobación que dejó abierta la Fase 5 y que **sigue abierta**:
+probar el borrador en el dominio de producción, que tiene un `localStorage`
+distinto del de `localhost`.
 
-El trabajo hecho deja la Fase 6 muy acotada, y es la fase mejor preparada del
-proyecto:
+**Después, Fase 7 — Cliente y documento final.** Formulario con validación,
+número de presupuesto, vista de documento y CSS de impresión para PDF.
 
-- **Los cuatro valores ya están** en `shared/constants/business-rules.ts` desde
-  la Fase 3, con su test de coherencia que vigila que ningún descuento
-  individual supere el tope.
-- **El hueco donde escribir ya existe:** `discountCents` está en cada
-  `PaymentBlock` desde la Fase 3 y vale 0.
-- **La pantalla está terminada.** Las filas de subtotal y descuento están
-  escritas y probadas desde la Fase 4, aunque valgan 0. La Fase 6 es solo
-  lógica y no debería tocar ningún componente.
-- **Los meses ya están en las líneas** desde la Fase 4, que es el dato que
-  necesita el descuento por permanencia, y `MAX_MONTHS` (36) está por encima de
-  los 12 meses del descuento, con un test que lo vigila.
-- **Quedan tres decisiones por tomar**: el pendiente nº 11 —a qué subtotal se
-  aplica el descuento por pack, porque la regla dice «el subtotal» y hay tres—,
-  el nº 19 —si se muestra el compromiso total de los servicios mensuales— y el
-  nº 18, que es el único que **sí toca pantalla**: la pista bajo el selector de
-  meses y el motivo de cada descuento en el resumen. Con eso, la afirmación de
-  arriba de que «la Fase 6 es solo lógica» deja de ser cierta, y conviene
-  saberlo al planificarla.
+Lo que la Fase 6 deja preparado y lo que deja vigilado:
+
+- **El presupuesto está funcionalmente completo.** La Fase 7 ya no cambia
+  ninguna cifra: construye un documento con las que hay.
+- **El desglose que se imprimirá ya está decidido y probado**, incluidos los
+  motivos de cada descuento, que son lo que un cliente necesita leer para
+  entender el importe.
+- **Dos ADR señalan la Fase 7 como su momento de riesgo**, y conviene leerlos
+  antes de empezarla: el [ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md)
+  avisa de que el documento invita a meter `firstPaymentCents` dentro de
+  `Budget` «para tenerlo todo junto», y el
+  [ADR 0011](docs/adr/0011-sin-compromiso-total.md), de que invita a rellenar
+  huecos con el compromiso total.
+- **Queda una decisión pendiente, la nº 16**: si los datos del cliente se
+  guardan en el borrador. Hoy no se guarda ningún dato personal.
 
 No se inicia sin autorización expresa del usuario.
 
 ### Aviso de plazo (apartado 9 de CLAUDE.md)
 
-**El margen sigue mejorando.** El plan contaba con los días 25 a 28 para las
-fases 4 a 11. A 24/11/2026 están cerradas las fases 0 a 5: **tres fases el
-mismo día 24** (la 3, la 4 y la 5), ninguna de las cuales estaba en el cálculo.
+**El margen sigue mejorando, y la Fase 6 ha sido de las cortas como se
+esperaba.** El plan contaba con los días 25 a 28 para las fases 4 a 11. A
+25/11/2026 están cerradas las fases 0 a 6, con la 6 cerrada en una sola sesión de
+la mañana del día 25.
 
-| Dato                                 | Antes de la Fase 4  | Antes de la Fase 5  | Ahora                   |
-| ------------------------------------ | ------------------- | ------------------- | ----------------------- |
-| Fases pendientes                     | 8 (de la 4 a la 11) | 7 (de la 5 a la 11) | **6** (de la 6 a la 11) |
-| Días de desarrollo (25, 26, 27 y 28) | 4                   | 4                   | 4                       |
-| Ritmo necesario                      | 2 fases al día      | 1,75 fases al día   | **1,5 fases al día**    |
+| Dato               | Antes de la Fase 5  | Antes de la Fase 6  | Ahora                               |
+| ------------------ | ------------------- | ------------------- | ----------------------------------- |
+| Fases pendientes   | 7 (de la 5 a la 11) | 6 (de la 6 a la 11) | **5** (de la 7 a la 11)             |
+| Días de desarrollo | 4 (25 al 28)        | 4 (25 al 28)        | **3,5** (resto del 25, 26, 27 y 28) |
+| Ritmo necesario    | 1,75 fases al día   | 1,5 fases al día    | **1,4 fases al día**                |
 
-Las tres fases cerradas el día 24 cupieron en una sesión cada una. La Fase 6 se
-parece a la 3 —lógica pura con TDD— y además llega con los valores, el hueco en
-el tipo y la pantalla ya hechos, así que es razonable esperar que sea de las
-cortas.
+La predicción de la Fase 5 se cumplió: la Fase 6 se parecía a la 3 —lógica pura
+con TDD— y llegó con los valores, el hueco en el tipo y la pantalla ya hechos.
+Lo único que no estaba previsto fue el pendiente nº 18, que sí tocaba
+componentes, y aun así cupo en la misma sesión.
 
-**Las dos que no se parecen siguen siendo las mismas:** la Fase 8 (descarga de
-los navegadores de Playwright, riesgo **R7**) y la Fase 9 (Husky y GitHub
-Actions, que tocan configuración y pueden pelearse con Windows).
+**Las dos fases que no se parecen a ninguna hecha siguen siendo las mismas:** la
+Fase 8 (descarga de los navegadores de Playwright, riesgo **R7**) y la Fase 9
+(Husky y GitHub Actions, que tocan configuración y pueden pelearse con Windows).
+Son las dos que pueden comerse un día entero por un problema de herramientas y
+no de código, y ahora están las dos **dentro** de los tres días que quedan.
 
-**No se proponen recortes**, y uno de los candidatos ha desaparecido de la
-lista: los **borradores en localStorage** eran el cuarto elemento del orden de
-recorte preacordado, y ya están hechos y probados. Lo que quedaría por recortar,
-si hiciera falta, es: 1) Husky, 2) tests E2E extra, 3) GitHub Actions avanzado,
-y antes que todos ellos la mejora opcional nº 14 de la lista de arriba.
+**No se proponen recortes.** Lo que quedaría por recortar, si hiciera falta, es:
 
-El riesgo **R8** sigue abierto —sigue siendo el más serio del proyecto— y el
-momento acordado para revisarlo otra vez es **al cerrar la Fase 7**, cuando la
-aplicación esté funcionalmente completa y lo que quede sean calidad, despliegue
-y entrega. Nunca se recortan el cálculo del presupuesto, los tests de la lógica
-de negocio, el despliegue, el README, las slides ni el vídeo.
+1. Husky, 2) tests E2E extra, 3) GitHub Actions avanzado, y antes que todos
+   ellos la mejora opcional nº 14 de la lista de arriba. Los borradores en
+   `localStorage`, que eran el cuarto elemento del orden preacordado, salieron de
+   la lista en la Fase 5 porque ya están hechos.
+
+El riesgo **R8** sigue abierto y sigue siendo el más serio del proyecto. El
+momento acordado para revisarlo otra vez es **al cerrar la Fase 7**, que es la
+siguiente: ahí la aplicación estará funcionalmente completa y lo que quede serán
+calidad, despliegue y entrega. Nunca se recortan el cálculo del presupuesto, los
+tests de la lógica de negocio, el despliegue, el README, las slides ni el vídeo.
 
 Los recortes se proponen; no se aplican por iniciativa propia.

@@ -1,6 +1,6 @@
 import type { BudgetLine } from '../../shared/types/budget'
 import type { StoredDraft, StoredDraftLine } from './draftFormat'
-import { isMonthlyLine } from './isMonthlyLine'
+import { isMonthlyLine } from '../../shared/utils/isMonthlyLine'
 
 /**
  * Convierte las líneas del presupuesto en el borrador que se guarda.

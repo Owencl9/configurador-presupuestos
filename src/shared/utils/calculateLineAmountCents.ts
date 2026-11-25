@@ -1,4 +1,4 @@
-import type { BudgetLine } from '../../shared/types/budget'
+import type { BudgetLine } from '../types/budget'
 
 /**
  * Importe de una línea del presupuesto, en céntimos: el precio del servicio por
@@ -20,6 +20,16 @@ import type { BudgetLine } from '../../shared/types/budget'
  * No valida nada: recibe una línea ya correcta. Mantener la cantidad dentro de
  * su mínimo y su máximo es trabajo de `normalizeNumber`, que es quien trata con
  * lo que escribe una persona o con lo que aparece en un borrador guardado.
+ *
+ * ## Por qué vive en `shared/utils/`
+ *
+ * Nació en `features/budget/` en la Fase 4, con dos usos dentro de esa misma
+ * funcionalidad. En la Fase 6 la necesita además la estrategia de permanencia,
+ * que vive en `shared/strategies/` y tiene que sumar el importe de las líneas
+ * mensuales de doce meses o más. Una carpeta de `shared/` no puede depender de
+ * una funcionalidad (apartado 6 de `CLAUDE.md`), y la alternativa era peor:
+ * duplicar precisamente la multiplicación que esta función existe para no
+ * duplicar. **El cuerpo no ha cambiado al mudarse, ni sus tests.**
  */
 export function calculateLineAmountCents(line: BudgetLine): number {
   return line.service.priceCents * line.quantity

@@ -18,6 +18,17 @@ export interface QuantitySelectorProps {
   /** Máximo admitido, incluido. */
   max: number
   /**
+   * Texto opcional que se añade bajo el campo, **asociado a él** igual que el
+   * rango.
+   *
+   * El componente no lo interpreta: lo coloca. Quien lo usa decide qué dice y
+   * cuándo cambia. En la Fase 6 lo aprovecha la línea del presupuesto para
+   * explicar el descuento por permanencia del selector de meses
+   * (pendiente nº 18 de PROGRESO.md), y el componente sigue sin conocer
+   * ninguna regla de negocio.
+   */
+  hint?: string
+  /**
    * Se invoca con el valor **ya corregido**, solo cuando cambia de verdad: al
    * salir del campo, al pulsar Enter o al usar los botones. Nunca en cada
    * pulsación del teclado.
@@ -59,6 +70,7 @@ export function QuantitySelector({
   value,
   min,
   max,
+  hint,
   onChange,
 }: QuantitySelectorProps) {
   /*
@@ -72,7 +84,17 @@ export function QuantitySelector({
 
   const textoMostrado = textoEditado ?? String(value)
   const idAyuda = `${id}-ayuda`
+  const idPista = `${id}-pista`
   const nombreAccesible = `${label} de ${itemName}`
+
+  /*
+   * El rango primero y la pista después, en ese orden: lo que limita lo que se
+   * puede escribir antes que la información de negocio. Sin pista, la
+   * descripción del campo es la de siempre, así que los tests de la Fase 4 no
+   * cambian.
+   */
+  const idsDeDescripcion =
+    hint === undefined ? idAyuda : `${idAyuda} ${idPista}`
 
   /** Confirma lo escrito: lo corrige, avisa si ha cambiado y sale de edición. */
   function confirmar() {
@@ -139,7 +161,7 @@ export function QuantitySelector({
           min={min}
           max={max}
           step={1}
-          aria-describedby={idAyuda}
+          aria-describedby={idsDeDescripcion}
           onChange={(evento) => setTextoEditado(evento.target.value)}
           onBlur={confirmar}
           onKeyDown={(evento) => {
@@ -171,6 +193,16 @@ export function QuantitySelector({
       <p id={idAyuda} className="text-xs text-slate-500">
         Entre {min} y {max} {unit}
       </p>
+
+      {/* La pista, si la hay. Va asociada al campo por `aria-describedby`, así
+          que se anuncia al entrar en él y no hace falta ninguna región activa.
+          No lleva color propio ni icono: lo que dice está en su texto
+          (apartado 3 de CLAUDE.md). */}
+      {hint !== undefined && (
+        <p id={idPista} className="text-xs text-slate-600">
+          {hint}
+        </p>
+      )}
     </div>
   )
 }

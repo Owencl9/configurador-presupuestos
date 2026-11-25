@@ -1,5 +1,5 @@
 import type { BudgetLine, Subtotals } from '../../shared/types/budget'
-import { calculateLineAmountCents } from './calculateLineAmountCents'
+import { calculateLineAmountCents } from '../../shared/utils/calculateLineAmountCents'
 
 /**
  * Reparte las líneas del presupuesto en los tres subtotales del apartado 4.4:

@@ -49,9 +49,19 @@ const BLOQUES: readonly {
  *
  * El orden de cálculo del apartado 4.3 completo: subtotal → descuento → base
  * imponible → IGIC → total. Las dos primeras filas **solo aparecen cuando hay
- * descuento**, porque mientras valga cero dirían dos veces la misma cifra. En
- * toda la Fase 4 vale cero —las estrategias son la Fase 6—, pero la pantalla ya
- * está terminada y probada para cuando llegue el dato.
+ * descuento**, porque mientras valga cero dirían dos veces la misma cifra.
+ *
+ * Desde la Fase 6, bajo la fila del descuento va **una fila por motivo**, con
+ * su importe: es el apartado 4.4 del prompt maestro, que pide los descuentos
+ * «explicando el motivo de cada uno». La fila del total se conserva (decisión
+ * del usuario), así que el desglose tiene siempre la misma forma tanto con un
+ * descuento como con dos. Con uno solo, el total y su único motivo muestran la
+ * misma cifra: es el precio de que la fila «Descuento» esté siempre en su sitio
+ * dentro del orden de cálculo.
+ *
+ * Las filas de la Fase 4 se escribieron y se probaron **una fase antes de que
+ * existiera el dato**, y la apuesta salió bien: la Fase 6 no ha tenido que
+ * decidir de nuevo cómo se muestra un descuento, solo añadir el detalle.
  *
  * Un bloque sin importe no se muestra: un presupuesto de solo diseño web no
  * tiene cuota mensual, y «Cuota mensual 0,00 €» es ruido que parece un error.
@@ -122,6 +132,27 @@ function BloqueDePago({ title, payment, block, igicLabel }: BloqueDePagoProps) {
                  suyos dedicados a ello (problema P11). */
               valor={formatEuros(-block.discountCents)}
             />
+
+            {/* El motivo de cada descuento, debajo del total (Fase 6).
+                Cumple el apartado 4.4 del prompt maestro y el pendiente nº 18.
+
+                Son pares `dt`/`dd` como las demás filas, sangrados y en letra
+                más pequeña: para un lector de pantalla se leen en orden justo
+                después de la fila «Descuento», así que la relación se entiende
+                sin depender de la sangría, que es solo visual. */}
+            {block.discounts.map(({ id, label, amountCents }, indice) => (
+              <Fila
+                key={`${id}-${indice}`}
+                termino={label}
+                /* La misma regla que la fila del total y sin ningún caso
+                   especial: el importe se muestra en negativo. El ajuste del
+                   tope, que es el único descuento con importe negativo porque
+                   devuelve parte de lo descontado, sale por tanto **sin**
+                   signo, y la columna suma a la vista. */
+                valor={formatEuros(-amountCents)}
+                detalle
+              />
+            ))}
           </>
         )}
 
@@ -142,12 +173,38 @@ function BloqueDePago({ title, payment, block, igicLabel }: BloqueDePagoProps) {
   )
 }
 
-/** Una fila del desglose: concepto a la izquierda, importe a la derecha. */
-function Fila({ termino, valor }: { termino: string; valor: string }) {
+/**
+ * Una fila del desglose: concepto a la izquierda, importe a la derecha.
+ *
+ * Con `detalle`, la fila es una de las que explican el motivo de un descuento:
+ * va sangrada y en letra más pequeña, para que se lea como parte de la fila
+ * anterior y no como un concepto más del desglose. La diferencia es solo
+ * visual, y es a propósito: **la información no se transmite con el formato**
+ * (apartado 3 de `CLAUDE.md`). Lo que explica cada fila es su propio texto
+ * —«Pack de 3 servicios o más (5 %)»—, que se lee igual de bien sin ver la
+ * sangría.
+ */
+function Fila({
+  termino,
+  valor,
+  detalle = false,
+}: {
+  termino: string
+  valor: string
+  detalle?: boolean
+}) {
   return (
-    <div className="flex items-baseline justify-between">
-      <dt className="text-slate-600">{termino}</dt>
-      <dd className="text-slate-900">{valor}</dd>
+    <div
+      className={`flex items-baseline justify-between gap-4 ${detalle ? 'pl-4 text-xs' : ''}`}
+    >
+      <dt className={detalle ? 'text-slate-500' : 'text-slate-600'}>
+        {termino}
+      </dt>
+      <dd
+        className={`whitespace-nowrap tabular-nums ${detalle ? 'text-slate-500' : 'text-slate-900'}`}
+      >
+        {valor}
+      </dd>
     </div>
   )
 }

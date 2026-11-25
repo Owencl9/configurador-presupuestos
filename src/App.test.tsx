@@ -418,4 +418,180 @@ describe('App — el borrador del presupuesto', () => {
       ).toBeInTheDocument()
     })
   })
+
+  /* ---------------------------------------------------------------------------
+   * Los descuentos, de punta a punta (Fase 6).
+   *
+   * Es el primer ejemplo que el usuario calculó a mano, construido como lo
+   * construiría una persona: pulsando los botones del catálogo y escribiendo en
+   * el selector de meses. Los tests de `calculateBudget` ya comprueban las
+   * cifras; lo que comprueba este es que **llegan a la pantalla**, con su
+   * motivo, y que la pista del selector cambia al cruzar los doce meses.
+   * ------------------------------------------------------------------------ */
+  describe('los descuentos en pantalla', () => {
+    /** Añade los tres servicios del ejemplo 1 y pone el SEO a 12 meses. */
+    async function montarEjemploUno(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(
+        screen.getByRole('button', {
+          name: 'Añadir Tienda online al presupuesto',
+        }),
+      )
+      await user.click(
+        screen.getByRole('button', {
+          name: 'Añadir SEO Profesional al presupuesto',
+        }),
+      )
+      await user.click(
+        screen.getByRole('button', {
+          name: 'Añadir Hosting y dominio al presupuesto',
+        }),
+      )
+
+      await ponerMeses(user, 12)
+    }
+
+    /** Escribe los meses del SEO y los confirma con Enter. */
+    async function ponerMeses(
+      user: ReturnType<typeof userEvent.setup>,
+      meses: number,
+    ) {
+      const campo = screen.getByRole('spinbutton', {
+        name: 'Meses de SEO Profesional',
+      })
+
+      await user.clear(campo)
+      await user.type(campo, `${meses}{Enter}`)
+    }
+
+    it('muestra los tres bloques del ejemplo 1 con sus importes', async () => {
+      /*
+       * Pago inicial   2.541,25 €
+       * Cuota mensual    409,28 €/mes
+       * Pago anual       121,98 €/año
+       * Primer día     3.072,51 €
+       */
+      const user = userEvent.setup()
+      render(<App />)
+
+      await montarEjemploUno(user)
+
+      const resumen = panel()
+
+      expect(within(resumen).getByText('2.541,25 €')).toBeInTheDocument()
+      expect(within(resumen).getByText('409,28 €/mes')).toBeInTheDocument()
+      expect(within(resumen).getByText('121,98 €/año')).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          '3 servicios en el presupuesto. A pagar el primer día (orientativo): 3.072,51 €',
+        ),
+      ).toBeInTheDocument()
+    })
+
+    it('explica el motivo de cada descuento', async () => {
+      /*
+       * El apartado 4.4 del prompt maestro, cumplido en pantalla: el pack en los
+       * tres bloques y la permanencia solo en la cuota mensual.
+       */
+      const user = userEvent.setup()
+      render(<App />)
+
+      await montarEjemploUno(user)
+
+      const resumen = panel()
+
+      expect(
+        within(resumen).getAllByText('Pack de 3 servicios o más (5 %)'),
+      ).toHaveLength(3)
+      expect(
+        within(resumen).getAllByText('Permanencia de 12 meses o más (10 %)'),
+      ).toHaveLength(1)
+
+      // Los dos descuentos de la cuota mensual, con su importe, y el total.
+      expect(within(resumen).getByText('-22,50 €')).toBeInTheDocument()
+      expect(within(resumen).getByText('-45,00 €')).toBeInTheDocument()
+      expect(within(resumen).getByText('-67,50 €')).toBeInTheDocument()
+    })
+
+    it('la pista del selector confirma el descuento con 12 meses', async () => {
+      const user = userEvent.setup()
+      render(<App />)
+
+      await montarEjemploUno(user)
+
+      expect(
+        screen.getByText('Descuento por permanencia aplicado'),
+      ).toBeInTheDocument()
+    })
+
+    it('al bajar a 11 meses desaparece la permanencia y la cuota sube', async () => {
+      /*
+       * **El borde de la regla, visto desde la aplicación.** Un mes menos y la
+       * cuota mensual pasa de 409,28 € a 457,43 €, que es la misma cifra del
+       * segundo ejemplo del usuario con seis meses: por debajo de doce meses, el
+       * número exacto da igual, porque el único descuento que queda es el pack.
+       *
+       * El primer día pasa de 3.072,51 € a 3.120,66 €, y los otros dos bloques
+       * no se mueven: la permanencia solo afecta a la cuota mensual.
+       */
+      const user = userEvent.setup()
+      render(<App />)
+
+      await montarEjemploUno(user)
+      await ponerMeses(user, 11)
+
+      const resumen = panel()
+
+      expect(within(resumen).getByText('457,43 €/mes')).toBeInTheDocument()
+      expect(
+        within(resumen).queryByText('409,28 €/mes'),
+      ).not.toBeInTheDocument()
+      expect(
+        within(resumen).queryByText('Permanencia de 12 meses o más (10 %)'),
+      ).not.toBeInTheDocument()
+
+      // El pack sigue en los tres bloques, y los otros dos totales no cambian.
+      expect(
+        within(resumen).getAllByText('Pack de 3 servicios o más (5 %)'),
+      ).toHaveLength(3)
+      expect(within(resumen).getByText('2.541,25 €')).toBeInTheDocument()
+      expect(within(resumen).getByText('121,98 €/año')).toBeInTheDocument()
+
+      expect(
+        screen.getByText(
+          '3 servicios en el presupuesto. A pagar el primer día (orientativo): 3.120,66 €',
+        ),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText('Desde 12 meses: 10 % de descuento'),
+      ).toBeInTheDocument()
+    })
+
+    it('no guarda ningún descuento en el borrador', async () => {
+      /*
+       * Los descuentos **se calculan siempre y no se guardan**. El borrador
+       * sigue siendo el de la Fase 5: identificador, cantidad y meses, y nada
+       * más ([ADR 0009](../docs/adr/0009-borradores-en-localstorage.md)).
+       *
+       * Un descuento guardado sería un importe editable desde el navegador, que
+       * es exactamente lo que la Fase 5 decidió que no podía ocurrir, y además
+       * caducaría en cuanto cambiara una regla.
+       */
+      const user = userEvent.setup()
+      render(<App />)
+
+      await montarEjemploUno(user)
+
+      const borrador = window.localStorage.getItem(DRAFT_STORAGE_KEY) ?? ''
+
+      expect(JSON.parse(borrador)).toEqual({
+        lines: [
+          { serviceId: 'online-store', quantity: 1 },
+          { serviceId: 'seo-professional', quantity: 1, months: 12 },
+          { serviceId: 'hosting-domain', quantity: 1 },
+        ],
+      })
+      expect(borrador).not.toContain('discount')
+      expect(borrador).not.toContain('pack')
+    })
+  })
 })

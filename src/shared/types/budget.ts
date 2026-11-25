@@ -69,7 +69,7 @@ export interface MonthlyBudgetLine extends BudgetLineBase {
  *    reserva, que es donde se esconden los errores de este tipo.
  *
  * Las dos están probadas con `@ts-expect-error` en
- * `features/budget/isMonthlyLine.test.ts`: lo que se comprueba ocurre al
+ * `shared/utils/isMonthlyLine.test.ts`: lo que se comprueba ocurre al
  * compilar, y si el compilador dejara de rechazar esas líneas, el propio
  * comentario pasaría a ser un error y `npm run build` fallaría.
  *
@@ -99,7 +99,7 @@ export interface MonthlyBudgetLine extends BudgetLineBase {
  * cierta.
  *
  * Por el mismo motivo —el discriminante anidado— para leer `months` hay que
- * pasar por `isMonthlyLine`, en `features/budget/`.
+ * pasar por `isMonthlyLine`, en `shared/utils/`.
  */
 export type BudgetLine =
   OneTimeBudgetLine | MonthlyBudgetLine | YearlyBudgetLine
@@ -122,6 +122,42 @@ export interface Subtotals {
 }
 
 /**
+ * Un descuento aplicado a un bloque de pago, **con su motivo**.
+ *
+ * El motivo no es decoración: el apartado 4.4 del prompt maestro exige que el
+ * resumen explique cada descuento, y la Fase 6 es la que puede cumplirlo porque
+ * cada estrategia devuelve el suyo junto al importe
+ * ([ADR 0004](../../../docs/adr/0004-strategy-para-descuentos.md)).
+ *
+ * Lo construye la estrategia que lo aplica, leyendo las constantes, así que
+ * cambiar un porcentaje en `business-rules.ts` cambia también el texto que se
+ * ve en pantalla. Un rótulo escrito a mano podría quedarse diciendo «5 %» con
+ * la regla al 8 %.
+ */
+export interface AppliedDiscount {
+  /**
+   * Identificador de la regla: `pack`, `commitment`, `amount` o `cap`.
+   *
+   * Es `string` y no una unión cerrada porque el calculador admite estrategias
+   * de prueba, que traen sus propios identificadores. Sirve de clave de lista
+   * en React y para distinguir reglas en los tests.
+   */
+  readonly id: string
+  /** El motivo, en español y listo para mostrar: «Pack de 3 servicios o más (5 %)». */
+  readonly label: string
+  /**
+   * Importe del descuento en céntimos, **positivo**: es lo que se resta.
+   *
+   * La única excepción es el ajuste del tope, que es negativo porque devuelve
+   * parte de lo descontado. Así la suma de los descuentos de un bloque es
+   * siempre exactamente su `discountCents`, y el desglose de pantalla cuadra
+   * con el importe que se resta. Ver
+   * [ADR 0010](../../../docs/adr/0010-como-se-aplican-los-descuentos.md).
+   */
+  readonly amountCents: number
+}
+
+/**
  * El cálculo completo de una de las tres formas de pago, en el orden que fija
  * el apartado 4.3: subtotal → descuentos → base imponible → IGIC → total.
  *
@@ -135,11 +171,27 @@ export interface PaymentBlock {
   /**
    * Descuento aplicado a este bloque, como importe positivo que se resta.
    *
-   * **Vale 0 en toda la Fase 3.** Los descuentos con patrón Strategy son la
-   * Fase 6 ([ADR 0004](../../../docs/adr/0004-strategy-para-descuentos.md)) y
-   * este es el hueco donde escribirán su resultado.
+   * Desde la Fase 6 lo escriben las estrategias de descuento, y **es siempre
+   * exactamente la suma de `discounts`**: no se calcula por separado, sino con
+   * `sumDiscountCents` sobre esa misma lista. Así el desglose que se muestra en
+   * pantalla no puede dejar de cuadrar con el importe que se resta.
    */
   readonly discountCents: number
+  /**
+   * Los descuentos que forman `discountCents`, **cada uno con su motivo**, en el
+   * orden en que se muestran.
+   *
+   * Está vacío cuando ninguna regla se cumple, que es el caso más frecuente, y
+   * entonces el resumen no muestra ninguna fila de descuento. Un descuento de
+   * importe cero nunca entra en la lista: una fila de «0,00 €» parece un error
+   * de cálculo.
+   *
+   * Vive **dentro del bloque** y no en una lista aparte del presupuesto
+   * (decisión del usuario al autorizar la Fase 6): así el importe y su
+   * explicación no se pueden desincronizar, y hay un test que comprueba la
+   * igualdad en los tres bloques.
+   */
+  readonly discounts: readonly AppliedDiscount[]
   /** `subtotalCents − discountCents`. Es la base sobre la que se aplica el IGIC. */
   readonly taxableBaseCents: number
   /** IGIC redondeado a céntimos. Un único redondeo por bloque (ADR 0007). */

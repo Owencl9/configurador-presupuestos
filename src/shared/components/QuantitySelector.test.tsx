@@ -50,6 +50,58 @@ describe('QuantitySelector', () => {
     expect(campo()).toHaveAccessibleDescription('Entre 6 y 36 meses')
   })
 
+  describe('la pista opcional', () => {
+    /*
+     * La pista llega en la Fase 6 para el descuento por permanencia
+     * (pendiente nº 18), pero el componente **no sabe nada de descuentos**:
+     * recibe un texto y lo coloca. Por eso los tests de aquí usan una pista
+     * inventada, y el texto real se prueba en `buildCommitmentHint.test.ts`.
+     */
+    it('no añade nada cuando no se le da ninguna pista', () => {
+      render(<QuantitySelector {...MESES_SEO} value={12} onChange={vi.fn()} />)
+
+      expect(campo()).toHaveAccessibleDescription('Entre 6 y 36 meses')
+    })
+
+    it('muestra la pista debajo del campo', () => {
+      render(
+        <QuantitySelector
+          {...MESES_SEO}
+          value={12}
+          hint="Una pista de ejemplo"
+          onChange={vi.fn()}
+        />,
+      )
+
+      expect(screen.getByText('Una pista de ejemplo')).toBeInTheDocument()
+    })
+
+    it('asocia la pista al campo, además del rango', () => {
+      /*
+       * Decisión del usuario al autorizar la fase: la pista va **en el texto
+       * asociado al campo**, no en una región de las que se anuncian solas. Así
+       * quien llegue al campo con el teclado oye las dos cosas —el rango y el
+       * descuento— y la frase de estado del panel, que sí se anuncia al
+       * cambiar, se queda corta como la dejó la Fase 4.
+       *
+       * El orden importa: primero el rango, que es lo que limita lo que se
+       * puede escribir, y después la pista, que es información de negocio.
+       */
+      render(
+        <QuantitySelector
+          {...MESES_SEO}
+          value={12}
+          hint="Una pista de ejemplo"
+          onChange={vi.fn()}
+        />,
+      )
+
+      expect(campo()).toHaveAccessibleDescription(
+        'Entre 6 y 36 meses Una pista de ejemplo',
+      )
+    })
+  })
+
   describe('al escribir en el campo', () => {
     it('deja escribir un número de dos cifras sin corregir la primera', async () => {
       /*
