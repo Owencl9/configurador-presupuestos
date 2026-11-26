@@ -1,6 +1,7 @@
 import js from '@eslint/js'
 import { defineConfig, globalIgnores } from 'eslint/config'
 import prettier from 'eslint-config-prettier/flat'
+import jsxA11y from 'eslint-plugin-jsx-a11y'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import globals from 'globals'
@@ -29,6 +30,20 @@ export default defineConfig([
       tseslint.configs.recommended,
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
+      /*
+       * Reglas de accesibilidad sobre el JSX (Fase 9, pendiente nº 3).
+       *
+       * Solo en este bloque: `e2e/` no tiene ni un componente, así que allí no
+       * hay JSX que revisar.
+       *
+       * Lo que estas reglas comprueban es **estático**: que un `<img>` lleve
+       * `alt`, que un elemento con `onClick` sea operable con el teclado, que
+       * un `<label>` esté asociado a su campo. No sustituyen a la revisión a
+       * mano de las fases 2, 4 y 7 —ninguna regla puede saber si un nombre
+       * accesible es *útil*—, pero sí vigilan de forma automática la clase de
+       * fallo que se cuela al escribir un componente nuevo con prisa.
+       */
+      jsxA11y.flatConfigs.recommended,
       // Debe ir el último: desactiva las reglas de ESLint que chocan con
       // Prettier, para que no se corrijan mutuamente al guardar.
       prettier,

@@ -21,9 +21,12 @@ Trabajo Final de Máster — Máster en Desarrollo con Inteligencia Artificial
 > cliente y se obtiene **el documento final, con su número y su validez, listo
 > para imprimir o guardar en PDF** desde el propio navegador.
 >
-> La aplicación está **funcionalmente completa**. Lo que queda son las fases de
-> calidad y entrega: tests E2E, accesibilidad e integración continua, repositorio
-> público y documentación final.
+> La aplicación está **funcionalmente completa**, y además **probada y
+> vigilada**: 560 tests de Vitest, 5 recorridos de Playwright en un navegador
+> real, reglas automáticas de accesibilidad en el lint, un gancho de pre-commit
+> y un workflow de integración continua que repite las seis comprobaciones en
+> cada push. Lo que queda es la entrega: repositorio público y documentación
+> final.
 
 > ### ⚠️ Los precios son ficticios
 >
@@ -53,7 +56,9 @@ Trabajo Final de Máster — Máster en Desarrollo con Inteligencia Artificial
 | Tests unitarios y de integración     | Vitest 5 + Testing Library |
 | Tests E2E                            | Playwright 1.65 (Chromium) |
 | Calidad de código                    | ESLint 10 + Prettier 3     |
-| Integración continua                 | GitHub Actions _(Fase 9)_  |
+| Accesibilidad automática             | eslint-plugin-jsx-a11y 6   |
+| Comprobaciones antes del commit      | Husky 9                    |
+| Integración continua                 | GitHub Actions             |
 | Despliegue                           | Vercel (plan Hobby)        |
 
 No hay backend, ni base de datos, ni autenticación: todo el cálculo ocurre en el
@@ -145,6 +150,80 @@ Los cinco recorridos están en [`e2e/`](e2e/), con sus Page Objects:
 Los informes, las capturas y las trazas que genera Playwright no se versionan:
 `playwright-report/`, `test-results/` y `blob-report/` están en el
 `.gitignore`. Solo se generan cuando un test falla.
+
+## Comprobaciones automáticas
+
+Las comprobaciones están **escalonadas**: cuanto más tarde se ejecutan, más
+abarcan y más tardan. Cada escalón cubre lo que el anterior no alcanza, y solo
+el último pasa las seis.
+
+| Cuándo                   | Qué se ejecuta                                                                                   | Cuánto tarda | Dónde está configurado                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------ | ------------ | ------------------------------------------------------ |
+| Al guardar, en el editor | **dos**: formatea con Prettier y aplica las correcciones automáticas de ESLint                   | instantáneo  | [`.vscode/settings.json`](.vscode/settings.json)       |
+| Antes de cada commit     | **tres**: `format:check`, `lint` y los tests de Vitest                                           | unos 25 s    | [`.husky/pre-commit`](.husky/pre-commit)               |
+| En cada push y PR        | **las seis**: formato, lint, tipos (`tsc -b`), tests de Vitest, build y los cinco recorridos E2E | minutos      | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
+
+El escalón del editor **corrige** en lugar de avisar, y por eso es el más
+cómodo y el menos fiable de los tres: depende de tener instaladas en VS Code
+las extensiones de ESLint (`dbaeumer.vscode-eslint`) y Prettier
+(`esbenp.prettier-vscode`), que están recomendadas en
+[`.vscode/extensions.json`](.vscode/extensions.json) y se ofrecen solas al
+abrir el proyecto. Sin ellas, el editor no hace nada y las dos redes siguientes
+son las que avisan. Ese archivo configura además el final de línea en LF, el
+salto de línea final, el recorte de espacios sobrantes —salvo en Markdown, donde
+dos espacios al final son un salto intencionado— y que el editor use **el
+TypeScript del proyecto**, para que informe exactamente de los mismos errores
+que `npm run build`.
+
+**Los tests de Playwright no están en el gancho de pre-commit**, a propósito:
+necesitan compilar la aplicación, levantar un servidor y abrir un navegador, y
+eso haría insoportable cada commit. Los ejecuta la integración continua.
+
+El gancho se instala solo: el script `prepare` de `package.json` apunta
+`core.hooksPath` a `.husky/` después de cada `npm install`, así que basta
+clonar el repositorio e instalar.
+
+Sobre el workflow conviene saber tres cosas, que están razonadas en los
+comentarios del propio archivo:
+
+- **Runner estándar y permisos mínimos** (`ubuntu-latest`, `contents: read`).
+  No usa secretos: no hay nada que autenticar.
+- **Cancela la ejecución anterior** si llegan dos pushes seguidos
+  (`concurrency` con `cancel-in-progress`) y tiene `timeout-minutes`, para que
+  nada se quede colgado gastando minutos.
+- **Cachea las dependencias y el navegador** de Playwright, e instala solo
+  Chromium. Si los recorridos fallan, sube su informe como artefacto —solo en
+  ese caso— con siete días de retención.
+
+### Accesibilidad
+
+Las reglas de [`eslint-plugin-jsx-a11y`](https://github.com/jsx-eslint/eslint-plugin-jsx-a11y)
+entran en el `lint` y se aplican al JSX de `src/`. Su configuración recomendada
+trae **34 reglas, de las que 31 están activas como error** y tres las desactiva
+ella misma (`anchor-ambiguous-text`, `label-has-for` y
+`control-has-associated-label`): que una imagen lleve texto alternativo, que un elemento con
+`onClick` sea operable con el teclado, que una etiqueta esté asociada a su
+campo. Al activarlas no apareció ni un aviso, y el motivo está en el código:
+**todos los `onClick` del proyecto están sobre un `<button>`**.
+
+Lo que esas reglas comprueban es estático, así que **no sustituyen a la revisión
+a mano**: ninguna regla puede saber si un nombre accesible es _útil_. Las
+decisiones de accesibilidad de este proyecto —la jerarquía de encabezados sin
+saltos, las regiones con nombre, el `aria-live` en una frase corta de estado y
+no en todo el resumen, el rango permitido en texto y no solo en el gris de un
+botón— están tomadas a mano y probadas con Vitest por rol y nombre accesible,
+no por clases de CSS.
+
+Lo que sí se comprueba **en un navegador real** es otra cosa, y conviene no
+confundirlas: el recorrido `keyboard.spec.ts` no mira los encabezados ni las
+regiones activas. Comprueba que la aplicación **se puede usar de punta a punta
+sin ratón**, que es justo lo que jsdom no puede responder, porque el orden de
+tabulación lo decide el motor del navegador: dónde cae el foco en cada
+tabulación, que Enter active el botón enfocado sin perder el foco, que
+`aria-pressed` cambie, que el campo de meses anuncie el descuento en su
+descripción accesible, y que los dos botones del documento sean alcanzables
+—sin eso, quien no usa ratón llegaría al documento y no podría imprimirlo ni
+volver atrás.
 
 ## Credenciales de prueba
 
@@ -368,10 +447,14 @@ lo comprueban sobre el contenido real del navegador.
 - ✅ Cinco recorridos de extremo a extremo en un navegador real, contra el build
   local, incluida la **vista de impresión emulada** y el recorrido completo **solo
   con el teclado**
+- ✅ Reglas automáticas de accesibilidad en el lint, gancho de pre-commit e
+  integración continua en cada push y pull request
 
 ### Previstas
 
-- Reglas automáticas de accesibilidad e integración continua (Fase 9)
+- Repositorio público con su revisión de secretos, Dependabot y la cabecera
+  `Content-Security-Policy` (Fase 10)
+- Slides y vídeo de demostración (Fase 11)
 
 ## Despliegue
 

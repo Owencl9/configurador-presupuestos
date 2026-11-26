@@ -197,15 +197,46 @@ describe('ClientForm', () => {
        */
       render(<ClientForm onSubmit={vi.fn()} />)
 
-      await userEvent.type(screen.getByLabelText(/^correo/i), 'ana@')
+      const correo = () => screen.getByLabelText(/^correo/i)
+      /*
+       * El localizador compara contra el **principio** del mensaje, que no
+       * contiene ningún dominio. Así un cambio en el ejemplo del texto —como el
+       * de la corrección C7-4— no desata el test de lo que comprueba.
+       */
+      const mensajeDelCorreo = () =>
+        screen.queryByText(/escribe un correo con el formato/i)
 
-      expect(screen.getByLabelText(/^correo/i)).not.toHaveAttribute(
-        'aria-invalid',
-        'true',
+      await userEvent.type(correo(), 'ana@')
+
+      expect(correo()).not.toHaveAttribute('aria-invalid', 'true')
+      expect(mensajeDelCorreo()).not.toBeInTheDocument()
+
+      /*
+       * CONTROL POSITIVO DE LA ASERCIÓN ANTERIOR (Fase 9).
+       *
+       * Las dos líneas de arriba son **negativas**: afirman que algo no está. Y
+       * una aserción negativa sobre un texto pasa igual si ese texto ya no
+       * existe en ninguna parte, así que por sí sola no distingue «el formulario
+       * se comporta como debe» de «ese mensaje ha desaparecido de la
+       * aplicación». Medido: con el mensaje del correo borrado de
+       * `validateClientData`, este test seguía en verde.
+       *
+       * Estas dos líneas cierran el hueco. Al enviar, el correo sí es inválido
+       * y el mensaje tiene que aparecer, buscado **con el mismo localizador**.
+       * Si el mensaje se borrara del formulario, la primera mitad seguiría
+       * pasando y esta segunda se pondría en rojo, que es lo que convierte el
+       * conjunto en una comprobación.
+       *
+       * Es la norma del apartado 5 de `CLAUDE.md` aplicada a un test en lugar
+       * de a una búsqueda: un «no está» solo vale si la misma búsqueda encuentra
+       * el dato cuando sí está.
+       */
+      await userEvent.click(
+        screen.getByRole('button', { name: /preparar el documento/i }),
       )
-      expect(
-        screen.queryByText(/formato nombre@example/i),
-      ).not.toBeInTheDocument()
+
+      expect(correo()).toHaveAttribute('aria-invalid', 'true')
+      expect(mensajeDelCorreo()).toBeInTheDocument()
     })
   })
 

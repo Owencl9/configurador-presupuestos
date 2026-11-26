@@ -1,0 +1,151 @@
+# =============================================================================
+# INTEGRACIÓN CONTINUA — FASE 9
+# =============================================================================
+#
+# Ejecuta en el servidor de GitHub las mismas seis comprobaciones que se
+# ejecutan a mano al cerrar cada fase —formato, lint, tipos, tests de Vitest,
+# build y recorridos de Playwright—. La idea es que un fallo se vea en el
+# repositorio y no dependa de que alguien se acuerde de lanzar los comandos.
+#
+# El orden de los pasos no es casual: **primero lo que falla rápido y barato**
+# (formato, lint, tipos), después los tests, y al final los E2E, que son lo
+# único que necesita compilar la aplicación, levantar un servidor y descargar un
+# navegador. Un error de formato se ve en treinta segundos en lugar de en cinco
+# minutos.
+#
+# Cuidado con los minutos: el repositorio es privado, así que estas ejecuciones
+# consumen la cuota gratuita de la cuenta y el gasto de pago está bloqueado a
+# 0 $. De ahí vienen tres decisiones de este archivo: el runner estándar, el
+# `concurrency` que cancela lo anterior y el `timeout-minutes`.
+# =============================================================================
+
+name: CI
+
+on:
+  # `push` solo en `main` y `pull_request` en cualquier rama. Si `push` cubriera
+  # todas las ramas, una rama con un pull request abierto ejecutaría el workflow
+  # **dos veces** por cada push —una por el push y otra por el PR— y serían el
+  # doble de minutos para el mismo resultado. Decisión del usuario en la Fase 9.
+  push:
+    branches: [main]
+  pull_request:
+
+# Permisos mínimos: este workflow solo necesita leer el código. No publica
+# nada, no escribe en el repositorio y no comenta en los pull requests.
+permissions:
+  contents: read
+
+# Si llegan dos pushes seguidos, la ejecución anterior se cancela en lugar de
+# terminar para nada. El grupo incluye la referencia (`github.ref`), así que una
+# ejecución de `main` no cancela la de un pull request ni al contrario.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  calidad:
+    name: Formato, lint, tipos, tests, build y E2E
+    # Runner estándar. Nunca un *larger runner*: cuestan varias veces más por
+    # minuto y aquí no hay nada que lo justifique.
+    runs-on: ubuntu-latest
+    # Red de seguridad: si algo se queda esperando —un servidor que no arranca,
+    # una descarga colgada—, el job se corta en lugar de gastar minutos hasta el
+    # límite de seis horas que GitHub aplica por defecto.
+    #
+    # **20 y no 15**, que era la cifra del plan. El motivo es la primera
+    # ejecución, que es la más lenta de todas y la única sin caché de ninguna
+    # clase: baja las dependencias de npm, descarga los 332,8 MB del navegador,
+    # instala sus librerías de sistema con apt y compila dos veces (el paso de
+    # build y otra vez el `webServer` de Playwright). 15 minutos probablemente
+    # basten, pero un corte por tiempo en el primer intento se parece mucho a un
+    # fallo real y cuesta un rato distinguirlo. 20 deja margen para eso y sigue
+    # estando muy por debajo de lo que un workflow colgado podría gastar.
+    timeout-minutes: 20
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v7
+
+      # `cache: npm` guarda la caché de descargas de npm entre ejecuciones
+      # usando el hash de `package-lock.json` como clave. No es `node_modules`:
+      # es el paquete descargado, así que `npm ci` sigue instalando desde cero
+      # pero sin volver a bajarlo de la red.
+      - name: Preparar Node.js 24 con caché de npm
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      # `npm ci` y no `npm install`: instala exactamente las versiones del
+      # `package-lock.json` y falla si el lock no concuerda con el
+      # `package.json`, en lugar de resolver versiones nuevas por su cuenta.
+      - name: Instalar las dependencias exactas del lock
+        run: npm ci
+
+      - name: Formato (Prettier)
+        run: npm run format:check
+
+      # Incluye las reglas de accesibilidad de `eslint-plugin-jsx-a11y`, que
+      # entraron en esta misma fase.
+      - name: Lint (ESLint, con las reglas de accesibilidad)
+        run: npm run lint
+
+      # `tsc -b` revisa también `e2e/`, por el `tsconfig.e2e.json` de la Fase 8.
+      # Va antes de los tests porque un error de tipos se detecta en segundos.
+      - name: Tipos (tsc -b, incluye e2e/)
+        run: npx tsc -b
+
+      # La variable `CI` la pone GitHub, y con ella Vitest desactiva su opción
+      # `allowOnly` —cuyo valor por defecto es precisamente `!process.env.CI`—,
+      # así que un `it.only` olvidado hace fallar el workflow en lugar de dejar
+      # el resto del archivo sin ejecutar en silencio.
+      - name: Tests de Vitest
+        run: npm test
+
+      - name: Build de producción
+        run: npm run build
+
+      # El navegador de Playwright son 332,8 MB. Sin caché se descargan en cada
+      # ejecución; con ella, solo cuando cambian las dependencias.
+      #
+      # La clave va contra el hash de `package-lock.json`, no contra la versión
+      # de Playwright escrita a mano: una versión a mano se queda desfasada en
+      # silencio y la caché devolvería un navegador que no corresponde a la
+      # versión instalada. El precio de esta elección es volver a descargar los
+      # 332,8 MB cuando se toca cualquier dependencia, aunque no sea Playwright.
+      - name: Caché del navegador de Playwright
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      # Solo Chromium, que es el único proyecto de `playwright.config.ts`.
+      # `--with-deps` instala las librerías del sistema que el navegador
+      # necesita en Ubuntu; eso se ejecuta siempre, también con la caché puesta,
+      # porque son paquetes de apt y no viven en la carpeta cacheada.
+      - name: Instalar Chromium (y solo Chromium)
+        run: npx playwright install --with-deps chromium
+
+      # El `webServer` de la configuración compila y sirve el build antes de
+      # lanzar los recorridos, igual que en local.
+      #
+      # Aquí la variable `CI` activa `forbidOnly`, que `playwright.config.ts`
+      # tiene puesto desde la Fase 8 (`process.env.CI !== undefined`): es el
+      # equivalente de Playwright al `allowOnly` de Vitest, y protege de lo
+      # mismo, un `test.only` olvidado que dejaría recorridos sin ejecutar.
+      - name: Tests E2E de Playwright
+        id: e2e
+        run: npm run test:e2e
+
+      # Material de diagnóstico **solo si los E2E han fallado**. La condición
+      # mira el resultado de ese paso concreto y no un `failure()` a secas: con
+      # `failure()` solo, un fallo del lint también activaría este paso, y
+      # entonces intentaría subir una carpeta que no existe. Siete días de
+      # retención: lo justo para diagnosticar un fallo sin acumular informes.
+      - name: Informe de Playwright (solo si los E2E fallan)
+        if: failure() && steps.e2e.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: informe-playwright
+          path: playwright-report/
+          retention-days: 7

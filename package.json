@@ -15,11 +15,19 @@
     "coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "//prepare": "npm lo ejecuta solo después de cada instalación. Apunta `core.hooksPath` a `.husky/`, que es lo que hace que el gancho de pre-commit exista en cualquier clonado del repositorio sin que nadie tenga que acordarse. Lo que el `|| true` cubre es un único caso: que husky **no esté instalado**, como en una instalación sin dependencias de desarrollo (`npm ci --omit=dev`), donde el script fallaría con «husky: not found» y tumbaría la instalación entera. No cubre la falta de un repositorio de Git, porque eso husky ya lo lleva resuelto: comprobado en la Fase 9 en una carpeta sin `.git`, imprime «.git can't be found» y sale con código 0 por su cuenta. Es decir, lo que protege a GitHub Actions y a Vercel es husky, no este `|| true`.",
+    "prepare": "husky || true"
   },
   "dependencies": {
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
+  },
+  "//overrides": "eslint-plugin-jsx-a11y 6.10.2 (la última publicada) declara como dependencia de pares `eslint: ^3 || … || ^9`, y este proyecto usa ESLint 10. npm 11 corta la instalación con un ERESOLVE. El plugin sí funciona con ESLint 10: su package.json es lo que no se ha actualizado, y hay un control positivo en docs/prompts/fase-09.md que lo demuestra (reglas disparando sobre código con fallos de accesibilidad reales). `$eslint` significa «la misma versión que ya usa el proyecto», así que no hay un número duplicado que se quede atrás. Se acota a este paquete a propósito: --legacy-peer-deps cambiaría la resolución del árbol entero y no quedaría escrito en ninguna parte.",
+  "overrides": {
+    "eslint-plugin-jsx-a11y": {
+      "eslint": "$eslint"
+    }
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -35,9 +43,11 @@
     "@vitest/coverage-v8": "^5.1.1",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.13.0",
+    "husky": "^9.1.7",
     "jsdom": "^31.0.1",
     "prettier": "^3.10.1",
     "prettier-plugin-tailwindcss": "^0.8.1",

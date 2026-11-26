@@ -1,0 +1,24 @@
+# =============================================================================
+# GANCHO DE PRE-COMMIT — FASE 9
+# =============================================================================
+#
+# Se ejecuta antes de cada `git commit` y lo aborta si algo falla. Lleva lo que
+# es rápido: formato, lint y los tests de Vitest, unos 25 segundos en total, de
+# los que la suite de Vitest es menos de la mitad.
+#
+# **Los tests de Playwright NO están aquí, a propósito.** Necesitan compilar la
+# aplicación, levantar un servidor y abrir un navegador: medio minuto largo que
+# haría insoportable cada commit. Esos los ejecuta GitHub Actions en el push.
+#
+# `set -e` no es decorativo. Sin él, el gancho devuelve el código de salida del
+# **último** comando, así que un lint en rojo seguido de unos tests en verde
+# dejaría pasar el commit sin que nada avisara: una comprobación que no puede
+# dar un resultado negativo. Es la norma del apartado 5 de `CLAUDE.md`, la misma
+# que el `;` en lugar de `&&` de la Fase 4. Con `set -e`, el primer fallo corta.
+# =============================================================================
+
+set -e
+
+npm run format:check
+npm run lint
+npm test
