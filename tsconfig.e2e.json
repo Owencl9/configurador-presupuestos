@@ -1,0 +1,52 @@
+{
+  /* Los tests de punta a punta y la configuración de Playwright.
+   *
+   * Existe para que `tsc -b` también los revise: hasta la Fase 8, el compilador
+   * solo miraba `src` (tsconfig.app.json) y `vite.config.ts`
+   * (tsconfig.node.json), así que un error de tipos en un test E2E no lo habría
+   * detectado nadie. Decisión del usuario al autorizar la fase, con su
+   * consecuencia aceptada: un error de tipos aquí para `npm run build`.
+   *
+   * Es un proyecto aparte y no una entrada más en los otros dos porque el
+   * entorno es distinto: estos archivos se ejecutan en Node (de ahí
+   * `types: ["node"]`), no en el navegador ni a través de Vite.
+   */
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
+    "target": "es2023",
+
+    /* `DOM` hace falta aunque los tests corran en Node: el código que se pasa a
+       `page.evaluate()` se ejecuta **dentro del navegador** y usa
+       `localStorage`, `window` y `document`. Sin esta librería, TypeScript no
+       conoce ninguno de los tres. */
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    /* Resolución de tipo «empaquetador», igual que la aplicación
+       (tsconfig.app.json) y **no** como `vite.config.ts`.
+
+       El primer intento copió el `module: "nodenext"` del proyecto de Node, y
+       TypeScript pidió extensión explícita en cada importación relativa
+       (`'./exampleBudget.js'`), que es lo que exige Node al ejecutar ESM de
+       verdad. Pero estos archivos no los ejecuta Node directamente: los
+       transpila Playwright, que resuelve `'./exampleBudget'` al archivo `.ts`
+       igual que hace Vite. El ajuste correcto es el que describe cómo se
+       ejecuta el código, no el que silencia el error. */
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Las mismas comprobaciones que el resto del proyecto. Un test con una
+       variable sin usar o un tipo flojo no es mejor test por ser un test. */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["e2e", "playwright.config.ts"]
+}

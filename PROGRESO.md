@@ -1,15 +1,15 @@
 # Estado del desarrollo
 
-**Última actualización:** 25/11/2026
-**Fase actual:** **Fase 7 completada**. La aplicación está **funcionalmente
-completa**: con el presupuesto hecho se escriben los datos del cliente y se
-obtiene el documento final, con su número `PRE-AAAA-NNNN`, su fecha de emisión y
-su validez de 30 días, listo para imprimir o guardar en PDF con la impresión del
-navegador. **Los datos del cliente no se guardan en ninguna parte**
-([ADR 0013](docs/adr/0013-datos-del-cliente-no-se-guardan.md)). 560 tests en
-verde. Probado en el navegador por el usuario, incluida la vista de impresión con
-`Ctrl+P` y el PDF guardado sin los encabezados del navegador, y **verificado en
-producción** (commit `99dd7ba`).
+**Última actualización:** 26/11/2026
+**Fase actual:** **Fase 8 completada**. La aplicación sigue **funcionalmente
+completa** —la Fase 8 no ha añadido ni cambiado ninguna funcionalidad— y ahora
+hay **560 tests de Vitest y 5 recorridos de Playwright** en un navegador real
+contra el build local. Los recorridos cubren lo que jsdom no puede comprobar: el
+**CSS de impresión** con el medio emulado, el `localStorage` entre recargas, el
+recorrido completo **solo con el teclado** y que el formulario del cliente no
+navegue ni ponga sus datos en la URL. El riesgo **R7 queda cerrado**.
+Probado por el usuario en el modo interactivo de Playwright y con ventana
+(`--headed`).
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**privado** hasta la Fase 10)
 **Aplicación desplegada:** https://configurador-presupuestos.vercel.app
@@ -31,7 +31,7 @@ producción** (commit `99dd7ba`).
 | 5    | Estado con Context + useReducer y borradores en localStorage                 | ✅ cerrada 24/11/2026 |
 | 6    | Descuentos con patrón Strategy                                               | ✅ cerrada 25/11/2026 |
 | 7    | Formulario de cliente y documento imprimible                                 | ✅ cerrada 25/11/2026 |
-| 8    | Tests E2E con Playwright                                                     | pendiente             |
+| 8    | Tests E2E con Playwright                                                     | ✅ cerrada 26/11/2026 |
 | 9    | Calidad: accesibilidad, cobertura, Husky, GitHub Actions                     | pendiente             |
 | 10   | Revisión de secretos, repositorio público, Dependabot, cabeceras             | pendiente             |
 | 11   | README final, ADR revisados, slides y guion del vídeo                        | pendiente             |
@@ -1816,96 +1816,485 @@ que sí está** —y, si lleva metacaracteres, repetirla sin ellos.
 
 ---
 
+## Completado en la Fase 8
+
+### La instalación, y el riesgo R7 cerrado
+
+Era la única instalación grande que le quedaba al proyecto, y la que llevaba
+ocho fases anotada como riesgo abierto. Se hizo **en tres pasos separados**, por
+la norma del apartado 1 de `CLAUDE.md`: una comprobación previa no puede ir en el
+mismo comando que la acción que condiciona.
+
+| #   | Comando                                     | Qué hizo                                        |
+| --- | ------------------------------------------- | ----------------------------------------------- |
+| 0   | `Get-PSDrive C`                             | 347,48 GB libres. Petición del usuario (C8-2)   |
+| 1   | `npm install --save-dev @playwright/test`   | 3 paquetes, **ningún navegador**                |
+| 2   | `npx playwright install --dry-run chromium` | **no descarga nada**: imprime URL y carpetas    |
+| 3   | `npx playwright install chromium`           | la descarga, solo tras mostrar los datos reales |
+
+El paso 2 no imprime los tamaños, así que se pidieron a los servidores con
+peticiones de solo cabecera (`curl -sI`), que tampoco descargan el archivo.
+
+| Archivo                           | Qué es                                | Descarga real |
+| --------------------------------- | ------------------------------------- | ------------- |
+| `chrome-win64.zip`                | Chrome for Testing 159.0.8154.6       | 207,3 MB      |
+| `chrome-headless-shell-win64.zip` | El mismo navegador sin interfaz       | 123,8 MB      |
+| `ffmpeg-win64.zip`                | Solo para grabar el vídeo de un fallo | 1,6 MB        |
+| `winldd-win64.zip`                | Comprueba que no falte ninguna DLL    | 0,1 MB        |
+| **Total**                         |                                       | **332,8 MB**  |
+
+**La estimación previa se quedó corta, y conviene anotarlo:** el plan dijo
+«~235 MB» y fueron 332,8 MB, un 42 % más. El motivo es que Playwright 1.65 ya no
+descarga la compilación abierta de Chromium sino **Chrome for Testing**, que es
+más grande, y añade dos utilidades que la estimación no contemplaba. La lección
+operativa: cuando una cifra sirve para pedir una autorización, se pregunta al
+servidor en lugar de estimarla. Ver el problema **P39** del registro de la fase.
+
+| Medición posterior          | Valor                                                    |
+| --------------------------- | -------------------------------------------------------- |
+| **En disco**                | **742,8 MB** en 4 carpetas (451,9 + 286,7 + 3,8 + 0,2)   |
+| Libre en C: antes / después | 347,48 GB → 346,7 GB                                     |
+| Dónde                       | `%LOCALAPPDATA%\ms-playwright`, **fuera del proyecto**   |
+| `npm audit`                 | **0 vulnerabilidades**, sin tocar ninguna versión (C8-3) |
+| Versión                     | Playwright 1.65.1                                        |
+
+Nada global de npm, ningún cambio del `PATH`, ningún permiso de administrador y
+**solo Chromium**: ni Firefox ni WebKit. Para deshacerlo bastaría con borrar esas
+cuatro carpetas y el paquete.
+
+**Hallazgo previo:** la carpeta `ms-playwright` ya existía, con 140 KB en 33
+subcarpetas **vacías** creadas el 16/10 por otra herramienta. No había ningún
+navegador dentro, así que la descarga ocurrió completa. Comprobarlo antes evitó
+dar por reutilizable algo que no lo era.
+
+**Y el navegador se comprobó funcionando, no solo descargado.** `npx playwright
+screenshot` sobre `about:blank` produjo un PNG de **1280×720**, verificado por su
+firma de ocho bytes (`89 50 4e 47 0d 0a 1a 0a`) y sus dimensiones leídas de la
+cabecera IHDR. Un archivo que existe no prueba que el ejecutable arranque; un PNG
+válido con dimensiones correctas sí.
+
+### Los cinco recorridos
+
+Son **pocos y completos**, por decisión del usuario. Cada uno recorre una
+historia entera en lugar de comprobar un detalle, porque un test E2E es caro de
+mantener y lo que aporta es la cadena, no la pieza.
+
+| Archivo                     | Qué recorre                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------ |
+| `full-budget.spec.ts`       | El ejemplo del usuario: catálogo → 12 meses → desglose fila por fila → documento → volver        |
+| `draft-persistence.spec.ts` | El borrador sobrevive a la recarga; los datos del cliente no. Sobre el `localStorage` real       |
+| `print-document.spec.ts`    | El documento con el medio `print` emulado: los botones y la nota se van, el presupuesto se queda |
+| `keyboard.spec.ts`          | Del catálogo al documento **sin tocar el ratón**                                                 |
+| `client-form.spec.ts`       | La validación, el foco en el error y **cero navegaciones** con la URL intacta                    |
+
+### Lo que prueba un navegador real y jsdom no
+
+Es la pregunta que decide si un test E2E merece existir, y la respuesta por
+recorrido:
+
+| Recorrido          | Lo que solo existe en un navegador de verdad                                                                                                                   |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Impresión          | **jsdom no aplica `@media print`.** Los tests de la Fase 7 solo podían comprobar que los elementos **llevan la clase** `no-print`, no que esa clase los oculte |
+| Borrador           | Un `localStorage` de verdad y una **recarga** de verdad, con el paquete compilado                                                                              |
+| Teclado            | El orden de tabulación lo decide el motor del navegador a partir del documento, los `tabindex` y **qué botones están desactivados**                            |
+| Formulario         | **jsdom no navega nunca.** Sin el `preventDefault` del envío, los 560 tests seguirían verdes y los datos del cliente acabarían en la barra de direcciones      |
+| Recorrido completo | Que lo que calcula `calculateBudget` llega a la pantalla, **sobrevive al paso por el formulario** y aparece igual en el documento                              |
+
+La cuarta fila es la más clara de todas: es un fallo real, con consecuencias de
+privacidad, **invisible para toda la suite de Vitest**.
+
+### Las cifras del ejemplo, en un solo sitio
+
+`e2e/exampleBudget.ts` guarda los tres servicios, los doce meses, las cifras
+esperadas y la fecha congelada. Lo usan cuatro de los cinco recorridos, así que
+si un día cambia el catálogo o una regla, **hay un único sitio que actualizar y
+los cuatro tests se ponen rojos a la vez**, que es la señal correcta.
+
+```
+Pago inicial    2.500,00 € − 125,00 € → 2.375,00 € + 166,25 € = 2.541,25 €
+Cuota mensual     450,00 € −  67,50 € →   382,50 € +  26,78 € =   409,28 €/mes
+Pago anual        120,00 € −   6,00 € →   114,00 € +   7,98 € =   121,98 €/año
+
+A pagar el primer día (orientativo): 3.072,51 €
+```
+
+Descuentos: 5 % de pack en los tres bloques y 10 % de permanencia en la cuota
+mensual. El de importe no entra —2.500 € no pasa de 3.000 €— y nada llega al tope
+del 20 %. El archivo **no acaba en `.spec.ts`**, así que Playwright no lo confunde
+con un archivo de tests.
+
+### El reloj, congelado
+
+El documento imprime la fecha de emisión, la validez a 30 días y un número que
+lleva el año dentro. Con el reloj del sistema, un test que afirmara
+`PRE-2026-0001` **dejaría de pasar el 1 de enero**, y el proyecto tiene la norma
+de que ningún test dependa del día en que se ejecuta.
+
+Decisión del usuario, opción (a) de las dos que se plantearon: **congelar el
+reloj del navegador** con `page.clock.setFixedTime()` y afirmar las tres cifras
+exactas. Se usa `setFixedTime` y no `install` a propósito: `setFixedTime` solo
+cambia lo que devuelven `Date.now()` y `new Date()` y **deja los temporizadores
+corriendo**, que es lo que React necesita para dibujar. `install` los falsea
+todos.
+
+| Dato             | Valor afirmado  |
+| ---------------- | --------------- |
+| Fecha de emisión | 10/03/2026      |
+| Válido hasta     | 09/04/2026      |
+| Número           | `PRE-2026-0001` |
+
+**La API del reloj no dio ningún problema con React, así que no hubo que pasar a
+la opción (b).** Y trae su propio control incorporado: la fase se cerró el
+26/11/2026, así que si el reloj no estuviera congelado estas tres aserciones
+fallarían solas.
+
+La zona horaria también se fija, en `playwright.config.ts`, a la de Canarias
+—porque el impuesto es el IGIC— junto con el idioma. La hora va en UTC y el 10 de
+marzo Canarias está en UTC+0, así que la fecha local del navegador es exactamente
+el día 10. Sin fijar la zona, el mismo test daría otro día en el servidor de
+GitHub Actions de la Fase 9.
+
+### Los Page Objects, y los dos problemas concretos que resuelven
+
+`e2e/pages/ConfiguratorPage.ts` y `e2e/pages/DocumentPage.ts`. Los pide el
+apartado 6 del prompt maestro, pero aquí resuelven dos cosas reales de **esta**
+aplicación:
+
+1. **El botón de quitar un servicio se llama igual en dos sitios.** `Quitar
+Tienda online del presupuesto` es el nombre accesible de la tarjeta del
+   catálogo **y** de la línea del presupuesto. Es deliberado desde la Fase 4 —es
+   la misma acción vista desde dos sitios— y significa que un localizador global
+   encuentra dos elementos y Playwright se niega a actuar. Cada método busca
+   dentro de su región.
+2. **«Total» es una subcadena de «Subtotal».** Una búsqueda por texto parcial
+   devuelve las dos filas del desglose. El método `fila()` compara el texto
+   completo.
+
+Todos los localizadores van **por rol y nombre accesible**, igual que los tests
+de Vitest: así un cambio de clases de Tailwind no rompe nada y, de paso, cada
+test comprueba que el nombre accesible sigue existiendo. La pista del selector de
+meses se comprueba a través de `toHaveAccessibleDescription`, que es **lo que se
+le anuncia a quien entra en el campo**, no la técnica con que se asocia.
+
+**Las claves de `localStorage` están escritas a mano y no importadas de `src/`.**
+Es una decisión, no un descuido: importarlas haría que el test siguiera
+automáticamente cualquier cambio de la clave, y entonces dejaría de comprobar lo
+único que importa de una clave de almacenamiento, que es **ser la misma de
+ayer**. Si alguien la cambia, todos los borradores guardados en los navegadores
+de quienes usan la aplicación quedan huérfanos, y eso es un cambio de
+comportamiento que un test tiene que detectar, no acompañar.
+
+### El tabulador: orden estricto donde se puede, alcanzabilidad donde no
+
+El recorrido con teclado comprueba de dos formas distintas, y la diferencia tiene
+causa técnica:
+
+- **Orden estricto** en las tres primeras tarjetas del catálogo y en los tres
+  campos del formulario con su botón. Ahí el test afirma exactamente dónde cae el
+  foco en cada pulsación.
+- **Alcanzabilidad** en el resto, con un ayudante `tabularHasta` que pulsa el
+  tabulador hasta llegar. El número de pulsaciones hasta el panel del presupuesto
+  **no es estable**, y no por un descuido: los botones «−» de los selectores
+  están desactivados cuando el valor está en su mínimo, y **un botón desactivado
+  no recibe el foco**. Un número fijo sería una trampa que se rompe al cambiar
+  una cantidad.
+
+Lo que queda probado es lo que exige el apartado 3 de `CLAUDE.md`: que todo es
+alcanzable con el teclado. Si un control deja de serlo, el bucle se agota y el
+test falla nombrándolo.
+
+### La separación entre las dos suites, comprobada en los dos sentidos
+
+La protección es doble —ni las carpetas ni los patrones de archivo coinciden— y
+se verificó con su control positivo, porque un «0» no distingue entre «no hay
+nada» y «esto no está buscando»:
+
+| Comprobación                             | Resultado                                  | Control que la valida                      |
+| ---------------------------------------- | ------------------------------------------ | ------------------------------------------ |
+| `npx playwright test --list`             | **5 tests en 5 archivos**, todos de `e2e/` | la misma orden encuentra los 5 `spec.ts`   |
+| Archivos de `src/` en esa lista          | **0**                                      | ↑ la misma búsqueda sí encuentra algo      |
+| `npx vitest list` con archivos de `e2e/` | **0**                                      | la misma orden cuenta los **45** de `src/` |
+
+### Los archivos de configuración
+
+| Archivo                | Qué se hizo                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `playwright.config.ts` | nuevo: `testDir: './e2e'`, solo Chromium, el `webServer`, idioma y zona horaria    |
+| `tsconfig.e2e.json`    | nuevo: para que `tsc -b` **también revise `e2e/`** (decisión del usuario)          |
+| `tsconfig.json`        | una referencia más                                                                 |
+| `vite.config.ts`       | `preview: { port: 4173, strictPort: true }`                                        |
+| `eslint.config.js`     | el bloque de React se acota a `src/`, y `e2e/` recibe el suyo con globales de Node |
+| `package.json`         | tres scripts: `test:e2e`, `test:e2e:ui` y `test:e2e:report`                        |
+
+Dos decisiones de esa tabla merecen explicación:
+
+- **`reuseExistingServer: false`**, petición del usuario (C8-1). Con `true`, un
+  `preview` que se hubiera quedado abierto de hace un rato se reutilizaría y los
+  tests pasarían sobre **un build antiguo** sin que nada lo dijera. Así cada
+  ejecución compila. Y como el puerto está fijado con `strictPort`, si está
+  ocupado el servidor no arranca: falla pronto y con un mensaje legible, en lugar
+  de probar contra otra cosa.
+- **`tsc -b` incluye ahora `e2e/`**, con su consecuencia aceptada: un error de
+  tipos en un test E2E para `npm run build`. El motivo es que un archivo que
+  nadie revisa envejece mal, y hasta esta fase el compilador solo miraba `src` y
+  `vite.config.ts`.
+
+El `.gitignore` **no ha hecho falta tocarlo**: tiene `playwright-report`,
+`test-results`, `blob-report` y `/playwright/.cache` desde la Fase 1, bajo el
+comentario «Playwright (Fase 8)». Lo que se hizo fue comprobarlo (ver las
+verificaciones).
+
+### Documentación
+
+- `docs/prompts/fase-08.md` con el registro de la fase.
+- `README.md`: Playwright en el stack, los tres scripts nuevos y el `--headed`,
+  un apartado sobre los tests de extremo a extremo con la descarga de los
+  navegadores y sus tamaños, `e2e/` en la estructura, y la nota de que los tests
+  unitarios viven junto al código **y los E2E son la excepción**, porque no
+  prueban un archivo sino la aplicación entera desde fuera.
+- **Ningún ADR nuevo.** No ha aparecido ninguna decisión que lo merezca: todo lo
+  decidido en esta fase es configuración de herramientas, y está explicado en los
+  comentarios de los archivos y aquí. Inventar un ADR para que la fase tenga uno
+  sería documentación de adorno.
+
+---
+
+## Verificaciones de la Fase 8
+
+| Comprobación           | Resultado                                                    | Código de salida |
+| ---------------------- | ------------------------------------------------------------ | ---------------- |
+| `npm test` (Vitest)    | **560 de 560 en verde**, 45 archivos, **ninguno modificado** | 0                |
+| `npm run test:e2e`     | **5 de 5 en verde**, 9,3 s                                   | 0                |
+| `npx tsc -b`           | sin una sola línea de salida, incluyendo ya `e2e/`           | 0                |
+| `npm run lint`         | sin una sola línea de salida                                 | 0                |
+| `npm run format:check` | «All matched files use Prettier code style!»                 | 0                |
+| `npm run build`        | 249,17 kB de JS (77,29 kB comprimido), 16,48 kB de CSS       | 0                |
+| `npm audit`            | 0 vulnerabilidades                                           | 0                |
+| Probado por el usuario | en `test:e2e:ui` y con `--headed`                            | —                |
+
+**El build es la mejor prueba de que esta fase no ha tocado la aplicación.** Los
+nombres de los archivos compilados son `index-BpmhP4VQ.js` e
+`index-yYO2TO7R.css`, **exactamente los mismos** que se verificaron en producción
+al cerrar la Fase 7. Esos nombres salen del contenido, así que dos builds con el
+mismo nombre son el mismo contenido. La Fase 8 solo ha añadido tests.
+
+### La columna de códigos de salida no es decorativa
+
+Está ahí porque el **primer** informe de `tsc` de esta fase salió con un rótulo
+«código: 0» mientras tsc estaba fallando con diecisiete errores: el `$?` era el
+de `tail` al final de la tubería, no el de `tsc`. Es exactamente la familia de
+problemas del apartado 5 de `CLAUDE.md`, que entró en las normas en la Fase 4 por
+un caso igual. Desde ese momento, cada comando guarda su código **antes** de
+encadenar nada. Ver el problema **P38**.
+
+### El control de que los recorridos no están huecos
+
+El ciclo rojo-verde del apartado 3 de `CLAUDE.md` no se puede ejecutar tal cual
+en un test E2E sobre funcionalidad ya hecha: el test nace en verde. Y **un test
+que no se ha visto fallar no demuestra nada**, así que cada recorrido lleva un
+control que puede dar negativo:
+
+| Recorrido            | Su control                                                                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Recorrido completo   | Se afirmó **`2.541,26 €` a propósito**: tres de los cinco tests se pusieron rojos informando `Received: "2.541,25 €"`, el valor real leído del navegador. Revertido |
+| Borrador             | Pareja positivo/negativo sobre la misma cadena: contiene `online-store`, no contiene `Tienda online`, `250000`, `2.500,00` ni `priceCents`                          |
+| Volcado completo     | El mismo volcado contiene `online-store` y `lastNumber`, y **no contiene ninguna `@`**, tras haber escrito un correo y emitido el documento                         |
+| Impresión            | Los mismos elementos, **visibles antes** de emular la impresión y ocultos después, y visibles **otra vez** al volver a `screen`                                     |
+| Teclado y formulario | Afirman un estado del foco, una URL y un número de navegaciones concretos, que fallan solos si el recorrido se rompe                                                |
+| Reloj                | Se incorpora solo: con el reloj sin congelar, las aserciones de fecha fallarían porque hoy no es el 10/03/2026                                                      |
+
+De los dos que **no** se pusieron rojos con el céntimo de más, uno es el del
+teclado —que solo afirma el total mensual— y el otro el del formulario, que no
+afirma ninguna cifra. Que fallaran exactamente los tres que miran esa cifra, y no
+los cinco, es parte de lo que valida el control.
+
+### Los informes existen y Git no los ve
+
+Esta comprobación tenía que distinguir «el `.gitignore` funciona» de «no hay nada
+que ignorar»:
+
+| Comprobación                                                | Resultado                                              |
+| ----------------------------------------------------------- | ------------------------------------------------------ |
+| `playwright-report/` y `test-results/` **existen en disco** | **sí**: 536 KB y 5 KB                                  |
+| `git status --porcelain` tras una ejecución completa        | solo los cambios previstos; **ninguna de las dos**     |
+| `git check-ignore -v`                                       | las nombra git: líneas **39 a 42** del `.gitignore`    |
+| Control negativo                                            | `playwright.config.ts` **no** está ignorado (código 1) |
+
+### Revisión de secretos (ejecutada al final, después de la documentación)
+
+**Diez categorías de datos**, cada una con su control positivo. Esta vez la
+búsqueda se hizo con `git grep --cached`, es decir, **sobre el índice**: lo que
+literalmente va a entrar en el commit, y no sobre los archivos del disco. Son 18
+archivos nuevos o modificados, con el índice completo como contexto.
+
+**Y lo primero fue comprobar el instrumento**, porque había un motivo concreto
+para dudar: `git diff --stat` muestra `package-lock.json` como binario, y
+`git grep` se salta los binarios. Resultó que sí lo lee —14 coincidencias de
+«playwright»—, así que la revisión cubre los 18 archivos y no 17.
+
+| #   | Categoría                                                          | Resultado                                                                                                                                                                                                                                                            | Control que valida la búsqueda                                                  |
+| --- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 1   | Direcciones de correo (expresión genérica)                         | **44 coincidencias, las 44 identificadas**, y una de ellas es el ejemplo escrito en esta misma celda. Las nuevas de esta fase son todas `ana@example.com`, en los recorridos E2E, sobre un dominio reservado por la RFC 2606: la corrección **C7-4 se ha respetado** | se valida sola: encuentra la `noreply`, que está desde la Fase 1                |
+| 2   | **Identificador del correo personal** del usuario, aportado por él | **0 coincidencias**                                                                                                                                                                                                                                                  | `Owencl9` con la misma orden: 17 coincidencias en 6 archivos                    |
+| 3   | Proveedores de correo personal                                     | **0 coincidencias**                                                                                                                                                                                                                                                  | la misma expresión con `github` dentro: 8 archivos                              |
+| 4   | Rutas con el nombre de usuario de Windows                          | **8 coincidencias, ninguna de esta fase.** Las 8 están en dos archivos anteriores y son una decisión ya tomada: ver el pendiente nº 17, **cuya lista de sitios se ha corregido con este hallazgo**                                                                   | `ms-playwright` con la misma orden: 5 archivos                                  |
+| 4b  | **La carpeta temporal de la sesión**                               | **0 coincidencias.** Era un riesgo real de esta fase: se trabajó con rutas absolutas de esa carpeta para la captura de prueba del navegador                                                                                                                          | el mismo control que la fila 4                                                  |
+| 5   | Claves, tokens y contraseñas                                       | ninguna. Solo la palabra en prosa, en las normas y al documentar estas mismas revisiones                                                                                                                                                                             | encontró esas menciones                                                         |
+| 6   | Direcciones IP                                                     | ninguna                                                                                                                                                                                                                                                              | `localhost` con la misma orden: 3 archivos, uno de ellos `playwright.config.ts` |
+| 7   | Teléfonos                                                          | **uno, el ficticio de la agencia** (`+34` y nueve ceros). La primera expresión no lo encontró: ver más abajo                                                                                                                                                         | se valida sola al encontrarlo                                                   |
+| 8   | URL con credenciales, del tipo `esquema://usuario:clave@`          | ninguna. Las dos únicas coincidencias del repositorio son **la descripción de esta categoría**, escrita al documentar esta revisión y la de la Fase 7                                                                                                                | se valida sola, igual que en las fases 6 y 7                                    |
+| 9   | NIF, CIF y DNI con forma real                                      | solo el ficticio de la agencia, `B00000000`, en sus tres apariciones                                                                                                                                                                                                 | la expresión reconoce la forma real de un CIF: por eso encuentra el ficticio    |
+| 10  | Datos de terceros                                                  | ninguno. **No hay ni un correo ajeno en todo el repositorio** —lo garantiza la categoría 1—, las menciones a un profesor **describen** el incidente de la Fase 1 sin reproducir el dato, y hay **cero archivos `.pdf`, `.docx` o `.pptx` versionados**               | `BIG School` con la misma orden: 3 archivos                                     |
+
+El término de la fila 2 **lo aportó el usuario en el momento de ejecutar la
+revisión y no se escribe en el repositorio**: es precisamente el dato que no debe
+aparecer (pendiente nº 15 y corrección C4-11). Aquí se describe, no se reproduce.
+
+#### Una categoría dio un falso negativo, y hubo que repetirla
+
+**La primera expresión de teléfonos devolvió 0, y en el repositorio hay un
+teléfono.** El patrón exigía seis o más dígitos **seguidos** tras el prefijo, y el
+teléfono ficticio de la agencia está escrito en grupos separados por espacios
+(`+34 000 000 000`), así que no podía coincidir con nada. Un cero que parecía una
+buena noticia.
+
+Lo destapó saber de antemano que ese teléfono existe —lo documentó la Fase 7—, es
+decir, **el control positivo haciendo exactamente su trabajo**. Repetida con una
+expresión que admite grupos separados, devuelve una coincidencia: la esperada, y
+ninguna más.
+
+Es la cuarta vez en dos fases que ocurre lo mismo con otro disfraz: `grep -c`
+contando líneas sobre un archivo minificado, un filtro que excluía justo el
+dominio buscado, un escapado roto y ahora un patrón que no admite espacios. **La
+lección ya no es una sorpresa:** un «sin coincidencias» solo vale si la misma
+búsqueda encuentra algo que se sabe que está.
+
+#### Un hallazgo de consistencia, no de seguridad
+
+La revisión destapó que los recorridos nuevos introducían un **segundo** nombre de
+empresa inventado para los datos de prueba, cuando los 560 tests anteriores usaban
+uno solo. No era un problema de datos —los dos son inventados— pero sí dos cosas
+donde el proyecto tiene una. **Se alinearon las cinco apariciones** con el nombre
+que ya existía.
+
+Y como esos cinco cambios se hicieron **después** de la revisión, la revisión se
+repitió al terminar, sobre el índice ya corregido. Es la corrección **C2-5** de la
+Fase 2 —una revisión describe un contenido concreto, y editar algo después la
+invalida— y van **cuatro fases seguidas** haciendo falta.
+
+#### Y la repetición encontró algo, que es la razón de repetirla
+
+En la segunda pasada, **la categoría 4 pasó de 8 coincidencias a 9**. La novena
+era texto escrito al corregir el pendiente nº 17 de este mismo archivo: para
+documentar en qué archivos sigue viva la ruta de trabajo, se citó **literalmente**
+el prompt en el que el usuario aprobó dejarla, y ese prompt la contiene. El
+párrafo que documentaba dónde está el dato **metió el dato en un archivo donde no
+estaba**.
+
+Es el enunciado exacto de la corrección **C1-6** de la Fase 1, que está en el
+apartado 5 de `CLAUDE.md` desde entonces, con su remedio incluido: describir el
+dato en lugar de reproducirlo. Corregido así, la categoría vuelve a 8.
+
+Lo que esta fase añade no es la norma, que ya existía, sino **cómo se detectó**:
+no por recordarla al escribir, sino porque la revisión se repitió después de
+editar y porque se comparó el recuento con el de la pasada anterior. Un 9 donde
+antes había un 8 es un hallazgo; un 9 mirado sin el 8 delante habría pasado por
+normal. Ver el problema **P42** del registro de la fase.
+
+---
+
 ## Pendiente y vigilado
 
-| #   | Asunto                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Cuándo                 |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos. **El historial ya está revisado** (ver el apartado anterior): no hay que reescribirlo                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Fase 10                |
-| 2   | El favicon sigue siendo el de Vite                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Fase 11                |
-| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Fase 9                 |
-| 4   | ~~Confirmar con el usuario los precios, el IGIC y las reglas de descuento~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | —                      |
-| 5   | ~~El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx`~~ **resuelto en la Fase 2**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | —                      |
-| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | —                      |
-| 7   | ~~Sustituir la conversión provisional de céntimos a euros de `buildPriceLabel` por el `formatEuros` probado~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | —                      |
-| 8   | ~~El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto~~ **resuelto en la Fase 4**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | —                      |
-| 9   | ~~**Los meses de contratación no están en `BudgetLine`.** Entran con su selector~~ **resuelto en la Fase 4**: unión discriminada, meses obligatorios en la línea mensual                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | —                      |
-| 10  | ~~**Decidir si el resumen muestra «lo que se paga hoy»**~~ **resuelto en la Fase 4**: sí, como línea informativa «A pagar el primer día (orientativo)», fuera del tipo `Budget` ([ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md))                                                                                                                                                                                                                                                                                                                                                                                                        | —                      |
-| 11  | ~~**A qué subtotal se aplica el descuento por pack**~~ **resuelto en la Fase 6**: a los tres bloques, con la condición evaluada sobre todo el presupuesto. Con ella se decidieron otras cuatro cosas que la especificación no contestaba —qué cuenta como servicio distinto, sumar en lugar de encadenar, los umbrales sobre el subtotal sin descontar y el tope por bloque— en el [ADR 0010](docs/adr/0010-como-se-aplican-los-descuentos.md)                                                                                                                                                                                                       | —                      |
-| 12  | ~~`calculateBudget` es el único punto de entrada del cálculo: los componentes no deben hacer cuentas~~ **cumplido en las fases 4, 5 y 6**: ni el reducer, ni el proveedor, ni `Configurator`, ni el botón de reiniciar, ni el resumen, ni la línea del presupuesto hacen una sola cuenta. En la Fase 6 los descuentos y sus motivos salen de `calculateBudget`, y la pista del selector de meses sale de una función con tests que comparte la condición con la estrategia. **Cumplido también en la Fase 7**: ni el documento, ni el formulario, ni `Configurator` hacen una cuenta, y la fecha de validez y el número salen de funciones con tests | —                      |
-| 13  | ~~**Añadir al apartado 1 de `CLAUDE.md` la norma de ritmo de la corrección C3-1**~~ **resuelto al abrir la Fase 4**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | —                      |
-| 14  | **Mejora opcional, solo si sobra tiempo:** resumen fijo en un lateral en pantallas anchas, para no tener que bajar hasta el final para ver los totales. Petición del usuario en la Fase 4. Es maquetación, no cálculo: **se recorta antes que cualquier cosa de la lista del apartado 9 de `CLAUDE.md`**                                                                                                                                                                                                                                                                                                                                             | Fase 11, si hay margen |
-| 15  | **Los términos concretos de la revisión de secretos los aporta el usuario** en el momento de ejecutarla: el nombre de su agencia, su dominio y el identificador de su correo personal. No pueden estar escritos en el repositorio, porque son precisamente los datos que no deben aparecer (corrección C4-11)                                                                                                                                                                                                                                                                                                                                        | Fase 10                |
-| 16  | ~~**Decidir si los datos del cliente se guardan en el borrador.**~~ **resuelto en la Fase 7**: no se guardan en ninguna parte. Lo sostiene dónde vive el estado —fuera del reducer, que es lo único que el borrador serializa— y no la intención de no escribir la línea que los guardaría. Con dos tests que lo comprueban sobre el contenido real del navegador ([ADR 0013](docs/adr/0013-datos-del-cliente-no-se-guardan.md))                                                                                                                                                                                                                     | —                      |
-| 17  | **La ruta absoluta de trabajo, con el nombre de usuario de Windows, sigue en el historial.** Entró en la Fase 1 en `docs/prompts/fase-00.md`; en la Fase 5 se ha sustituido en el archivo actual por `%USERPROFILE%\…`, pero los commits anteriores la conservan. **Decidir en la Fase 10 si se limpia**, sabiendo que limpiarla obliga a reescribir el historial y que el nombre del autor ya es público por la firma de los commits, que es intencionada                                                                                                                                                                                           | Fase 10                |
-| 18  | ~~**Nada en pantalla explica para qué sirven los meses.**~~ **resuelto en la Fase 6**: la pista bajo el selector de meses («Desde 12 meses: 10 % de descuento» → «Descuento por permanencia aplicado»), asociada al campo, y el motivo de cada descuento en el resumen, como pide el apartado 4.4 del prompt maestro. La pista comparte la condición con la estrategia, así que no puede anunciar un descuento que el presupuesto no lleva                                                                                                                                                                                                           | —                      |
-| 19  | ~~**Decidir si se muestra el compromiso total de los servicios mensuales**~~ **resuelto en la Fase 6**: no se muestra. Sería una cuarta cifra confundible con un total, y encima parcial, porque no incluiría el pago inicial ni el anual ([ADR 0011](docs/adr/0011-sin-compromiso-total.md))                                                                                                                                                                                                                                                                                                                                                        | —                      |
+| #   | Asunto                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Cuándo                 |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| 1   | **Repositorio privado.** Hacerlo público tras la revisión de secretos. **El historial ya está revisado** (ver el apartado anterior): no hay que reescribirlo                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Fase 10                |
+| 2   | El favicon sigue siendo el de Vite                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Fase 11                |
+| 3   | `eslint-plugin-jsx-a11y` (reglas de accesibilidad)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Fase 9                 |
+| 4   | ~~Confirmar con el usuario los precios, el IGIC y las reglas de descuento~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | —                      |
+| 5   | ~~El `Service` type y el catálogo real sustituirán los datos provisionales de `App.tsx`~~ **resuelto en la Fase 2**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | —                      |
+| 6   | Si se regenera el andamiaje, usar `--eslint`: la plantilla ya usa Oxlint por defecto                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | —                      |
+| 7   | ~~Sustituir la conversión provisional de céntimos a euros de `buildPriceLabel` por el `formatEuros` probado~~ **resuelto en la Fase 3**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | —                      |
+| 8   | ~~El contador «Servicios seleccionados» es provisional: lo reemplaza el resumen del presupuesto~~ **resuelto en la Fase 4**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | —                      |
+| 9   | ~~**Los meses de contratación no están en `BudgetLine`.** Entran con su selector~~ **resuelto en la Fase 4**: unión discriminada, meses obligatorios en la línea mensual                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | —                      |
+| 10  | ~~**Decidir si el resumen muestra «lo que se paga hoy»**~~ **resuelto en la Fase 4**: sí, como línea informativa «A pagar el primer día (orientativo)», fuera del tipo `Budget` ([ADR 0008](docs/adr/0008-el-primer-pago-es-presentacion.md))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | —                      |
+| 11  | ~~**A qué subtotal se aplica el descuento por pack**~~ **resuelto en la Fase 6**: a los tres bloques, con la condición evaluada sobre todo el presupuesto. Con ella se decidieron otras cuatro cosas que la especificación no contestaba —qué cuenta como servicio distinto, sumar en lugar de encadenar, los umbrales sobre el subtotal sin descontar y el tope por bloque— en el [ADR 0010](docs/adr/0010-como-se-aplican-los-descuentos.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | —                      |
+| 12  | ~~`calculateBudget` es el único punto de entrada del cálculo: los componentes no deben hacer cuentas~~ **cumplido en las fases 4, 5 y 6**: ni el reducer, ni el proveedor, ni `Configurator`, ni el botón de reiniciar, ni el resumen, ni la línea del presupuesto hacen una sola cuenta. En la Fase 6 los descuentos y sus motivos salen de `calculateBudget`, y la pista del selector de meses sale de una función con tests que comparte la condición con la estrategia. **Cumplido también en la Fase 7**: ni el documento, ni el formulario, ni `Configurator` hacen una cuenta, y la fecha de validez y el número salen de funciones con tests                                                                                                                                                                                                                                                                                                                                                                                          | —                      |
+| 13  | ~~**Añadir al apartado 1 de `CLAUDE.md` la norma de ritmo de la corrección C3-1**~~ **resuelto al abrir la Fase 4**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | —                      |
+| 14  | **Mejora opcional, solo si sobra tiempo:** resumen fijo en un lateral en pantallas anchas, para no tener que bajar hasta el final para ver los totales. Petición del usuario en la Fase 4. Es maquetación, no cálculo: **se recorta antes que cualquier cosa de la lista del apartado 9 de `CLAUDE.md`**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Fase 11, si hay margen |
+| 15  | **Los términos concretos de la revisión de secretos los aporta el usuario** en el momento de ejecutarla: el nombre de su agencia, su dominio y el identificador de su correo personal. No pueden estar escritos en el repositorio, porque son precisamente los datos que no deben aparecer (corrección C4-11)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Fase 10                |
+| 16  | ~~**Decidir si los datos del cliente se guardan en el borrador.**~~ **resuelto en la Fase 7**: no se guardan en ninguna parte. Lo sostiene dónde vive el estado —fuera del reducer, que es lo único que el borrador serializa— y no la intención de no escribir la línea que los guardaría. Con dos tests que lo comprueban sobre el contenido real del navegador ([ADR 0013](docs/adr/0013-datos-del-cliente-no-se-guardan.md))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | —                      |
+| 17  | **La ruta absoluta de trabajo, con el nombre de usuario de Windows, sigue en el historial y también en el árbol actual.** Entró en la Fase 1 en `docs/prompts/fase-00.md`; en la Fase 5 se sustituyó **en ese archivo** por `%USERPROFILE%\…`, pero los commits anteriores la conservan. **La revisión de la Fase 8 encontró que sigue viva en dos archivos más**, que la redacción anterior de este pendiente no nombraba: `docs/fase-00-inventario-entorno.md` (**7 apariciones**: la carpeta del proyecto, la ruta de Git, el Escritorio, OneDrive y el editor) y `docs/prompts/fase-01.md` (**1**, dentro de un prompt en el que el usuario aprobó expresamente dejar esas rutas tal cual, y que por eso las contiene). Así que no es una fuga, es una **decisión tomada** cuya lista de sitios estaba mal anotada. **Decidir en la Fase 10 si se limpia**, ahora con la lista completa, sabiendo que limpiar el historial obliga a reescribirlo y que el nombre del autor ya es público por la firma de los commits, que es intencionada | Fase 10                |
+| 18  | ~~**Nada en pantalla explica para qué sirven los meses.**~~ **resuelto en la Fase 6**: la pista bajo el selector de meses («Desde 12 meses: 10 % de descuento» → «Descuento por permanencia aplicado»), asociada al campo, y el motivo de cada descuento en el resumen, como pide el apartado 4.4 del prompt maestro. La pista comparte la condición con la estrategia, así que no puede anunciar un descuento que el presupuesto no lleva                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | —                      |
+| 19  | ~~**Decidir si se muestra el compromiso total de los servicios mensuales**~~ **resuelto en la Fase 6**: no se muestra. Sería una cuarta cifra confundible con un total, y encima parcial, porque no incluiría el pago inicial ni el anual ([ADR 0011](docs/adr/0011-sin-compromiso-total.md))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | —                      |
 
 ### Riesgos abiertos (del inventario de la Fase 0)
 
-| ID  | Riesgo                                        | Estado                                                                   |
-| --- | --------------------------------------------- | ------------------------------------------------------------------------ |
-| R3  | Secretos en un repositorio público            | abierto y vigilado — `.gitignore` en su sitio, sin secretos en el código |
-| R4  | Finales de línea CRLF/LF                      | **cerrado** en la Fase 1                                                 |
-| R5  | Copia de seguridad del Escritorio en OneDrive | abierto — no activarla                                                   |
-| R7  | Descarga de los navegadores de Playwright     | abierto — Fase 8                                                         |
-| R8  | **Plazo de entrega**                          | abierto y crítico                                                        |
+| ID  | Riesgo                                        | Estado                                                                                                                       |
+| --- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| R3  | Secretos en un repositorio público            | abierto y vigilado — `.gitignore` en su sitio, sin secretos en el código                                                     |
+| R4  | Finales de línea CRLF/LF                      | **cerrado** en la Fase 1                                                                                                     |
+| R5  | Copia de seguridad del Escritorio en OneDrive | abierto — no activarla                                                                                                       |
+| R7  | Descarga de los navegadores de Playwright     | **cerrado** en la Fase 8 — 332,8 MB descargados, 742,8 MB en disco, fuera del proyecto, y el navegador comprobado arrancando |
+| R8  | **Plazo de entrega**                          | abierto y crítico                                                                                                            |
 
 ---
 
 ## Siguiente paso
 
-**La Fase 7 está cerrada, publicada y verificada**, y la aplicación está
-funcionalmente completa. Lo que queda por hacer no añade ninguna funcionalidad al
-producto: son calidad, despliegue y entrega.
+**La Fase 8 está cerrada**, con el riesgo **R7 cerrado** con ella. La aplicación
+sigue funcionalmente completa y esta fase no le ha añadido nada: los nombres de
+los archivos compilados son idénticos a los de la Fase 7.
 
-**Siguiente, Fase 8 — Tests de extremo a extremo con Playwright**, con Page
-Objects en `e2e/`, que es la carpeta que todavía no existe.
+**Siguiente, Fase 9 — Calidad:** reglas de accesibilidad en ESLint
+(`eslint-plugin-jsx-a11y`, pendiente nº 3), revisión de accesibilidad, cobertura
+de tests, Husky y GitHub Actions.
 
-Lo que la Fase 7 deja preparado y lo que deja vigilado:
+Lo que la Fase 8 deja preparado y lo que deja vigilado para la Fase 9:
 
-- **El recorrido completo está en una sola pantalla y en un solo estado**, así
-  que un test E2E puede recorrerlo entero: catálogo → presupuesto → formulario →
-  documento, y volver.
-- **Hay cosas que solo un navegador real puede comprobar**, y la Fase 8 es su
-  sitio: el aspecto de la hoja impresa. jsdom no aplica `@media print`, y
-  Playwright sí puede emular el medio de impresión. Lo que hoy sostiene esa
-  parte es la comprobación visual del usuario con `Ctrl+P`.
-- **El riesgo R7 sigue abierto** y es lo primero de la Fase 8: la descarga de
-  los navegadores de Playwright es la única instalación grande que le queda al
-  proyecto, y no se lanza sin autorización.
-- Vitest está configurado para recoger **solo** `src/**/*.test.{ts,tsx}`, desde
-  la Fase 1 y precisamente para esto: los tests de Playwright no van a chocar
-  con los 560 actuales.
+- **Hay dos suites que la integración continua tendrá que ejecutar**, no una, y
+  la de Playwright necesita algo que la de Vitest no: **descargar el navegador en
+  el servidor**. En GitHub Actions eso es un paso propio
+  (`npx playwright install --with-deps chromium`) y conviene cachearlo, porque
+  son 332,8 MB en cada ejecución si no se hace.
+- **La zona horaria y el idioma ya están fijados** en `playwright.config.ts`,
+  precisamente para que los recorridos den el mismo resultado en el servidor que
+  en este equipo. Era el problema que iba a aparecer en la Fase 9 y está resuelto
+  antes de llegar.
+- **`forbidOnly` ya está puesto**, condicionado a la variable `CI`: un
+  `test.only` olvidado dejaría pasar la mitad de la suite sin que nada avisara.
+- **`tsc -b` ya revisa `e2e/`**, así que el `npm run build` de la integración
+  continua cubre también los tests de extremo a extremo.
+- **La cobertura solo mide Vitest**, y hay que decirlo en la Fase 9 al mirar el
+  informe: los recorridos de Playwright ejercitan muchísimo código y **no
+  aparecen en esa cifra**. Una cobertura que baje al añadir E2E no significa que
+  haya menos código probado.
 
 No se inicia sin autorización expresa del usuario.
 
 ### Aviso de plazo (apartado 9 de CLAUDE.md) — revisión del riesgo R8
 
-Este era el momento acordado para revisar el plazo, y la revisión sale bien.
+| Dato               | Antes de la Fase 7       | Antes de la Fase 8              | Ahora                           |
+| ------------------ | ------------------------ | ------------------------------- | ------------------------------- |
+| Fases pendientes   | 5 (de la 7 a la 11)      | 4 (de la 8 a la 11)             | **3** (de la 9 a la 11)         |
+| Días de desarrollo | 3,5 (resto del 25 al 28) | 3,5 (resto del 25, 26, 27 y 28) | **2,5** (resto del 26, 27 y 28) |
+| Ritmo necesario    | 1,4 fases al día         | 1,15 fases al día               | **1,2 fases al día**            |
 
-| Dato               | Antes de la Fase 6  | Antes de la Fase 7       | Ahora                               |
-| ------------------ | ------------------- | ------------------------ | ----------------------------------- |
-| Fases pendientes   | 6 (de la 6 a la 11) | 5 (de la 7 a la 11)      | **4** (de la 8 a la 11)             |
-| Días de desarrollo | 4 (25 al 28)        | 3,5 (resto del 25 al 28) | **3,5** (resto del 25, 26, 27 y 28) |
-| Ritmo necesario    | 1,5 fases al día    | 1,4 fases al día         | **1,15 fases al día**               |
+A 26/11/2026 están cerradas **las fases 0 a 8**. El ritmo necesario sube un poco
+—de 1,15 a 1,2— simplemente porque ha pasado un día, y la Fase 8 ha ocupado solo
+una parte de él.
 
-A 25/11/2026 están cerradas **las fases 0 a 7**, y las fases 6 y 7 han caído el
-mismo día. El plan original reservaba los días 25 a 28 para las fases 4 a 11, y
-van siete de ellas.
+**La buena noticia de esta revisión es cuál era el riesgo y qué ha pasado con
+él.** Las tres revisiones anteriores decían lo mismo: lo que podía costar un día
+entero no era el código, eran **las dos fases que no se parecían a ninguna
+hecha**, la 8 y la 9, por ser las que tocan herramientas y pueden pelearse con
+Windows. La primera de las dos ha caído en una sesión corta y sin un solo
+problema de herramientas: ni la descarga, ni el reloj del navegador, ni la
+convivencia de los dos runners. Los dos fallos de la fase fueron de
+configuración y de localizadores, y se arreglaron en minutos.
 
-**El cambio importante de esta revisión no es el número, es qué clase de trabajo
-queda.** Hasta hoy, cada fase podía descubrir que una regla de negocio no estaba
-bien entendida. Eso se ha terminado: el cálculo, los descuentos, el estado, el
-formulario y el documento están hechos y probados. Las cuatro fases que quedan
-tocan herramientas y documentación, no reglas.
-
-**Y ahí está el riesgo que sigue abierto**, que es el mismo que se señaló en las
-dos revisiones anteriores: **las dos fases que no se parecen a ninguna hecha son
-las dos siguientes.** La Fase 8 (descarga de los navegadores de Playwright,
-riesgo **R7**) y la Fase 9 (Husky y GitHub Actions, que tocan configuración y
-pueden pelearse con Windows) son las que pueden comerse un día entero por un
-problema de herramientas y no de código. El margen que han ganado las fases 6 y 7
-es, en buena medida, el colchón de esas dos.
+**Queda la Fase 9**, que es ahora la única pendiente de esa clase: Husky y
+GitHub Actions. Es el último sitio donde un problema de herramientas puede comer
+tiempo, y el colchón para ello es el día que la Fase 8 no ha gastado.
 
 **No se proponen recortes.** Si hicieran falta, el orden preacordado es:
 
@@ -1914,12 +2303,16 @@ es, en buena medida, el colchón de esas dos.
    `localStorage`, que eran el cuarto elemento del orden, salieron de la lista en
    la Fase 5 porque ya están hechos.
 
-El riesgo **R8** sigue abierto, pero ha dejado de ser el más probable: con la
-aplicación funcionalmente completa y cuatro fases de calidad y entrega por
-delante, lo que puede estropear la entrega es un problema de herramientas, no de
-tiempo. El próximo momento para revisarlo es **al cerrar la Fase 9**, que es
-cuando se sabrá si las dos fases de herramientas han ido como se espera. Nunca
-se recortan el cálculo del presupuesto, los tests de la lógica de negocio, el
-despliegue, el README, las slides ni el vídeo.
+Y una nota sobre el segundo elemento de ese orden, ahora que existe: **los
+«tests E2E extra» ya no son un recorte disponible.** Los cinco recorridos son los
+que pidió el usuario, están hechos y pasan. Lo que se recortaría de aquí en
+adelante sería Husky, y después las partes avanzadas de GitHub Actions.
+
+El riesgo **R8** sigue abierto, pero con tres fases de documentación, calidad y
+entrega por delante y la aplicación terminada y probada en un navegador real, lo
+que puede estropear la entrega ya no es el desarrollo. El próximo momento para
+revisarlo es **al cerrar la Fase 9**. Nunca se recortan el cálculo del
+presupuesto, los tests de la lógica de negocio, el despliegue, el README, las
+slides ni el vídeo.
 
 Los recortes se proponen; no se aplican por iniciativa propia.

@@ -51,7 +51,7 @@ Trabajo Final de Máster — Máster en Desarrollo con Inteligencia Artificial
 | Empaquetado y servidor de desarrollo | Vite 8                     |
 | Estilos                              | Tailwind CSS 4             |
 | Tests unitarios y de integración     | Vitest 5 + Testing Library |
-| Tests E2E                            | Playwright _(Fase 8)_      |
+| Tests E2E                            | Playwright 1.65 (Chromium) |
 | Calidad de código                    | ESLint 10 + Prettier 3     |
 | Integración continua                 | GitHub Actions _(Fase 9)_  |
 | Despliegue                           | Vercel (plan Hobby)        |
@@ -77,17 +77,74 @@ El servidor de desarrollo queda en http://localhost:5173.
 
 ### Comandos disponibles
 
-| Comando                | Qué hace                                                         |
-| ---------------------- | ---------------------------------------------------------------- |
-| `npm run dev`          | servidor de desarrollo con recarga en caliente                   |
-| `npm run build`        | comprueba los tipos y genera la versión de producción en `dist/` |
-| `npm run preview`      | sirve en local lo generado por `build`                           |
-| `npm test`             | ejecuta los tests una vez                                        |
-| `npm run test:watch`   | ejecuta los tests y se queda vigilando los cambios               |
-| `npm run coverage`     | informe de cobertura de tests                                    |
-| `npm run lint`         | análisis estático con ESLint                                     |
-| `npm run format`       | formatea el código con Prettier                                  |
-| `npm run format:check` | comprueba el formato sin modificar archivos                      |
+| Comando                   | Qué hace                                                         |
+| ------------------------- | ---------------------------------------------------------------- |
+| `npm run dev`             | servidor de desarrollo con recarga en caliente                   |
+| `npm run build`           | comprueba los tipos y genera la versión de producción en `dist/` |
+| `npm run preview`         | sirve en local lo generado por `build`                           |
+| `npm test`                | ejecuta los tests una vez                                        |
+| `npm run test:watch`      | ejecuta los tests y se queda vigilando los cambios               |
+| `npm run coverage`        | informe de cobertura de tests                                    |
+| `npm run test:e2e`        | ejecuta los tests de extremo a extremo en un navegador real      |
+| `npm run test:e2e:ui`     | los mismos, en el modo interactivo de Playwright                 |
+| `npm run test:e2e:report` | abre el informe del último lanzamiento de los E2E                |
+| `npm run lint`            | análisis estático con ESLint                                     |
+| `npm run format`          | formatea el código con Prettier                                  |
+| `npm run format:check`    | comprueba el formato sin modificar archivos                      |
+
+`npm test` y `npm run test:e2e` son **dos suites distintas** y no se solapan:
+Vitest solo recoge `src/**/*.test.{ts,tsx}` y Playwright solo recoge
+`e2e/**/*.spec.ts`. Ni las carpetas ni los patrones de archivo coinciden.
+
+### Los tests de extremo a extremo
+
+Hacen falta **los navegadores de Playwright**, que no vienen con `npm install`
+porque no son un paquete de npm. Se descargan una sola vez, y solo Chromium:
+
+```bash
+npx playwright install chromium
+```
+
+Son unos 330 MB de descarga y unos 740 MB en disco, y **no se guardan en el
+proyecto**: van a la caché de Playwright del usuario
+(`%LOCALAPPDATA%\ms-playwright` en Windows, `~/.cache/ms-playwright` en Linux).
+No hace falta ningún permiso de administrador.
+
+Después, los tres comandos:
+
+```bash
+npm run test:e2e           # los cinco recorridos, sin ventana, en unos 10 s
+npm run test:e2e:ui        # modo interactivo: la película de cada test, paso a paso
+npm run test:e2e:report    # el informe del último lanzamiento
+```
+
+Y para **verlos ejecutarse en un navegador con ventana**, que es la forma más
+clara de entender qué hacen:
+
+```bash
+npx playwright test --headed                     # los cinco
+npx playwright test keyboard.spec.ts --headed    # solo el recorrido con teclado
+```
+
+**Se ejecutan contra el build local, nunca contra la web publicada.** Playwright
+lanza él mismo `npm run build && npm run preview` en
+http://localhost:4173, espera a que responda, pasa los tests y apaga el
+servidor. El puerto está fijado con `strictPort`, así que si está ocupado el
+lanzamiento falla con un mensaje claro en lugar de probar contra otra cosa.
+
+Los cinco recorridos están en [`e2e/`](e2e/), con sus Page Objects:
+
+| Archivo                     | Qué recorre                                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `full-budget.spec.ts`       | Catálogo → permanencia de 12 meses → desglose completo → documento, comprobando que las cifras son las mismas      |
+| `draft-persistence.spec.ts` | El borrador sobrevive a una recarga y los datos del cliente no, comprobado sobre el `localStorage` real            |
+| `print-document.spec.ts`    | El documento con el medio de impresión emulado: los botones y la nota no se imprimen, el presupuesto sí            |
+| `keyboard.spec.ts`          | Del catálogo al documento **sin tocar el ratón**, solo con el tabulador y Enter                                    |
+| `client-form.spec.ts`       | La validación, el foco en el campo que falla, y que el envío **no navega ni pone los datos del cliente en la URL** |
+
+Los informes, las capturas y las trazas que genera Playwright no se versionan:
+`playwright-report/`, `test-results/` y `blob-report/` están en el
+`.gitignore`. Solo se generan cuando un test falla.
 
 ## Credenciales de prueba
 
@@ -116,6 +173,8 @@ específico de cada funcionalidad en su propia carpeta.
 ├── docs/                   Documentación del TFM
 │   ├── adr/                Decisiones técnicas (Architecture Decision Records)
 │   └── prompts/            Registro de prompts por fase (evidencia de desarrollo con IA)
+├── e2e/                    Tests de extremo a extremo con Playwright
+│   └── pages/              Page Objects: los localizadores, en un solo sitio
 ├── public/                 Archivos servidos tal cual
 └── src/
     ├── main.tsx            Punto de entrada: monta React en el DOM
@@ -138,11 +197,10 @@ específico de cada funcionalidad en su propia carpeta.
     └── test/               Configuración común de los tests
 ```
 
-En la Fase 8 se añadirá `e2e/`, con los tests de Playwright y sus Page Objects.
-Todavía no existe.
-
-Los tests viven junto al código que prueban: `ServiceCard.tsx` y
-`ServiceCard.test.tsx` están en la misma carpeta.
+Los tests unitarios y de integración viven **junto al código que prueban**:
+`ServiceCard.tsx` y `ServiceCard.test.tsx` están en la misma carpeta. Los de
+extremo a extremo son la excepción, y por un motivo: no prueban un archivo, sino
+la aplicación entera desde fuera, así que viven aparte en `e2e/`.
 
 ### El catálogo de servicios
 
@@ -307,10 +365,12 @@ lo comprueban sobre el contenido real del navegador.
 - ✅ Documento final con aspecto de presupuesto, que **sustituye en pantalla al
   configurador**, y CSS de impresión para imprimirlo o guardarlo en PDF desde el
   navegador, sin librerías de PDF
+- ✅ Cinco recorridos de extremo a extremo en un navegador real, contra el build
+  local, incluida la **vista de impresión emulada** y el recorrido completo **solo
+  con el teclado**
 
 ### Previstas
 
-- Tests de extremo a extremo con Playwright (Fase 8)
 - Reglas automáticas de accesibilidad e integración continua (Fase 9)
 
 ## Despliegue
@@ -341,13 +401,20 @@ cabecera que puede dejar la página en blanco si se escribe mal.
 
 - **TDD** en toda la lógica de negocio: primero el test, se comprueba que falla,
   después la implementación mínima y por último la refactorización. **560 tests
-  en verde** al cerrar la Fase 7.
+  de Vitest y 5 recorridos de Playwright en verde** al cerrar la Fase 8.
 - **Una comprobación en verde no cuenta hasta que se demuestra que puede ponerse
   en rojo.** Las búsquedas de seguridad llevan un control positivo —buscar algo
   que se sabe que existe— y los tests que pasan a la primera se verifican
   cambiando la regla que dicen comprobar, para ver si fallan. En la Fase 6 se
   hizo con los tests de integración de los descuentos: subiendo el mínimo de
-  permanencia a 13 meses, 4 de los 5 se pusieron en rojo.
+  permanencia a 13 meses, 4 de los 5 se pusieron en rojo. En la Fase 8, con los
+  recorridos E2E: afirmando un céntimo de más en un total, tres de los cinco se
+  pusieron en rojo informando de la cifra real leída del navegador.
+- **Las dos suites prueban cosas distintas, y a propósito.** Vitest prueba
+  funciones y componentes en un navegador simulado; Playwright prueba lo que
+  solo existe en un navegador de verdad: el CSS de impresión, el
+  `localStorage` entre recargas, el orden real del tabulador y que el formulario
+  no navegue. Un recorrido E2E no repite lo que ya prueba un test unitario.
 - **Los datos que no son de fiar se validan en la frontera**: lo que llega de
   `localStorage` pasa por una función pura que lo comprueba antes de que ningún
   componente lo vea. Las funciones que tocan el navegador no pueden lanzar.
