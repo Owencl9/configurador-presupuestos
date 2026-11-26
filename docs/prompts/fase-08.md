@@ -463,6 +463,33 @@ El usuario aportó el identificador de su correo personal como término de búsq
 como en las fases 2, 6 y 7. **No se escribe en el repositorio**, porque es
 exactamente el dato que no debe aparecer (pendiente nº 15). Aquí se describe.
 
+### C8-9 — La evidencia que cerró el hueco de la verificación
+
+La verificación en producción se entregó con una limitación declarada: como los
+archivos publicados son **idénticos byte a byte** a los de la Fase 7 —esta fase
+no toca la aplicación—, la comparación no podía distinguir «Vercel ha desplegado
+este commit» de «Vercel sirve todavía el anterior».
+
+El usuario aportó el dato que falta y que está fuera del alcance de cualquier
+`curl`:
+
+> En GitHub, el commit 77bd38e muestra el check de Vercel en verde (1/1), así que
+> Vercel sí desplegó este commit.
+
+**No es una corrección de un error, es la pieza que faltaba**, y se registra aquí
+porque enseña dos cosas del método:
+
+1. Una comprobación que no puede separar dos situaciones **no se arregla
+   repitiéndola ni afinándola**: se complementa con otra que mire desde otro
+   sitio. El `cmp` demuestra que lo publicado es este build; el estado del check
+   demuestra que el despliegue de este commit ocurrió. Ninguna de las dos sola
+   dice las dos cosas.
+2. El requisito previo para que alguien pueda cerrar un hueco es **que el hueco
+   esté dicho en voz alta**. Si la verificación se hubiera entregado afirmando
+   sin matices «verificado en producción», el dato del check no habría hecho
+   falta porque nadie habría sabido que faltaba. Declarar lo que una comprobación
+   no prueba es lo que permite que se complete.
+
 ---
 
 ## 6. Aprendizajes de la fase

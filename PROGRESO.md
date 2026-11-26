@@ -9,7 +9,7 @@ contra el build local. Los recorridos cubren lo que jsdom no puede comprobar: el
 recorrido completo **solo con el teclado** y que el formulario del cliente no
 navegue ni ponga sus datos en la URL. El riesgo **R7 queda cerrado**.
 Probado por el usuario en el modo interactivo de Playwright y con ventana
-(`--headed`).
+(`--headed`), y **verificado en producción** (commit `77bd38e`).
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**privado** hasta la Fase 10)
 **Aplicación desplegada:** https://configurador-presupuestos.vercel.app
@@ -2132,19 +2132,19 @@ para dudar: `git diff --stat` muestra `package-lock.json` como binario, y
 `git grep` se salta los binarios. Resultó que sí lo lee —14 coincidencias de
 «playwright»—, así que la revisión cubre los 18 archivos y no 17.
 
-| #   | Categoría                                                          | Resultado                                                                                                                                                                                                                                                            | Control que valida la búsqueda                                                  |
-| --- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| 1   | Direcciones de correo (expresión genérica)                         | **44 coincidencias, las 44 identificadas**, y una de ellas es el ejemplo escrito en esta misma celda. Las nuevas de esta fase son todas `ana@example.com`, en los recorridos E2E, sobre un dominio reservado por la RFC 2606: la corrección **C7-4 se ha respetado** | se valida sola: encuentra la `noreply`, que está desde la Fase 1                |
-| 2   | **Identificador del correo personal** del usuario, aportado por él | **0 coincidencias**                                                                                                                                                                                                                                                  | `Owencl9` con la misma orden: 17 coincidencias en 6 archivos                    |
-| 3   | Proveedores de correo personal                                     | **0 coincidencias**                                                                                                                                                                                                                                                  | la misma expresión con `github` dentro: 8 archivos                              |
-| 4   | Rutas con el nombre de usuario de Windows                          | **8 coincidencias, ninguna de esta fase.** Las 8 están en dos archivos anteriores y son una decisión ya tomada: ver el pendiente nº 17, **cuya lista de sitios se ha corregido con este hallazgo**                                                                   | `ms-playwright` con la misma orden: 5 archivos                                  |
-| 4b  | **La carpeta temporal de la sesión**                               | **0 coincidencias.** Era un riesgo real de esta fase: se trabajó con rutas absolutas de esa carpeta para la captura de prueba del navegador                                                                                                                          | el mismo control que la fila 4                                                  |
-| 5   | Claves, tokens y contraseñas                                       | ninguna. Solo la palabra en prosa, en las normas y al documentar estas mismas revisiones                                                                                                                                                                             | encontró esas menciones                                                         |
-| 6   | Direcciones IP                                                     | ninguna                                                                                                                                                                                                                                                              | `localhost` con la misma orden: 3 archivos, uno de ellos `playwright.config.ts` |
-| 7   | Teléfonos                                                          | **uno, el ficticio de la agencia** (`+34` y nueve ceros). La primera expresión no lo encontró: ver más abajo                                                                                                                                                         | se valida sola al encontrarlo                                                   |
-| 8   | URL con credenciales, del tipo `esquema://usuario:clave@`          | ninguna. Las dos únicas coincidencias del repositorio son **la descripción de esta categoría**, escrita al documentar esta revisión y la de la Fase 7                                                                                                                | se valida sola, igual que en las fases 6 y 7                                    |
-| 9   | NIF, CIF y DNI con forma real                                      | solo el ficticio de la agencia, `B00000000`, en sus tres apariciones                                                                                                                                                                                                 | la expresión reconoce la forma real de un CIF: por eso encuentra el ficticio    |
-| 10  | Datos de terceros                                                  | ninguno. **No hay ni un correo ajeno en todo el repositorio** —lo garantiza la categoría 1—, las menciones a un profesor **describen** el incidente de la Fase 1 sin reproducir el dato, y hay **cero archivos `.pdf`, `.docx` o `.pptx` versionados**               | `BIG School` con la misma orden: 3 archivos                                     |
+| #   | Categoría                                                          | Resultado                                                                                                                                                                                                                                                                                                                                                                                                                                    | Control que valida la búsqueda                                                  |
+| --- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 1   | Direcciones de correo (expresión genérica)                         | **48 coincidencias al cerrar la fase, las 48 identificadas**; cinco de ellas son ejemplos escritos en esta misma revisión y en la verificación en producción, que se redactó después. Las nuevas del código son todas `ana@example.com`, en los recorridos E2E, sobre un dominio reservado por la RFC 2606: la corrección **C7-4 se ha respetado**. El desglose por dominios dejó además un hallazgo para la Fase 10: ver el pendiente nº 20 | se valida sola: encuentra la `noreply`, que está desde la Fase 1                |
+| 2   | **Identificador del correo personal** del usuario, aportado por él | **0 coincidencias**                                                                                                                                                                                                                                                                                                                                                                                                                          | `Owencl9` con la misma orden: 17 coincidencias en 6 archivos                    |
+| 3   | Proveedores de correo personal                                     | **0 coincidencias**                                                                                                                                                                                                                                                                                                                                                                                                                          | la misma expresión con `github` dentro: 8 archivos                              |
+| 4   | Rutas con el nombre de usuario de Windows                          | **8 coincidencias, ninguna de esta fase.** Las 8 están en dos archivos anteriores y son una decisión ya tomada: ver el pendiente nº 17, **cuya lista de sitios se ha corregido con este hallazgo**                                                                                                                                                                                                                                           | `ms-playwright` con la misma orden: 5 archivos                                  |
+| 4b  | **La carpeta temporal de la sesión**                               | **0 coincidencias.** Era un riesgo real de esta fase: se trabajó con rutas absolutas de esa carpeta para la captura de prueba del navegador                                                                                                                                                                                                                                                                                                  | el mismo control que la fila 4                                                  |
+| 5   | Claves, tokens y contraseñas                                       | ninguna. Solo la palabra en prosa, en las normas y al documentar estas mismas revisiones                                                                                                                                                                                                                                                                                                                                                     | encontró esas menciones                                                         |
+| 6   | Direcciones IP                                                     | ninguna                                                                                                                                                                                                                                                                                                                                                                                                                                      | `localhost` con la misma orden: 3 archivos, uno de ellos `playwright.config.ts` |
+| 7   | Teléfonos                                                          | **uno, el ficticio de la agencia** (`+34` y nueve ceros). La primera expresión no lo encontró: ver más abajo                                                                                                                                                                                                                                                                                                                                 | se valida sola al encontrarlo                                                   |
+| 8   | URL con credenciales, del tipo `esquema://usuario:clave@`          | ninguna. Las dos únicas coincidencias del repositorio son **la descripción de esta categoría**, escrita al documentar esta revisión y la de la Fase 7                                                                                                                                                                                                                                                                                        | se valida sola, igual que en las fases 6 y 7                                    |
+| 9   | NIF, CIF y DNI con forma real                                      | solo el ficticio de la agencia, `B00000000`, en sus tres apariciones                                                                                                                                                                                                                                                                                                                                                                         | la expresión reconoce la forma real de un CIF: por eso encuentra el ficticio    |
+| 10  | Datos de terceros                                                  | ninguno. **No hay ni un correo ajeno en todo el repositorio** —lo garantiza la categoría 1—, las menciones a un profesor **describen** el incidente de la Fase 1 sin reproducir el dato, y hay **cero archivos `.pdf`, `.docx` o `.pptx` versionados**                                                                                                                                                                                       | `BIG School` con la misma orden: 3 archivos                                     |
 
 El término de la fila 2 **lo aportó el usuario en el momento de ejecutar la
 revisión y no se escribe en el repositorio**: es precisamente el dato que no debe
@@ -2203,6 +2203,86 @@ normal. Ver el problema **P42** del registro de la fase.
 
 ---
 
+## Verificación en producción (commit `77bd38e`)
+
+Hecha el 26/11/2026 sobre https://configurador-presupuestos.vercel.app, después
+del `push`. El SHA remoto se consultó **al servidor** con `git ls-remote`, no al
+caché local de `origin/main`, y coincide con el local:
+`77bd38e0e5dd19f73c27f13c2e00f73155f57056`. Árbol de trabajo limpio, sin un solo
+archivo sin seguimiento.
+
+**El mensaje del commit se escribió en un archivo fuera del proyecto y se pasó
+con `git commit -F`** (como en las fases 6 y 7). Comprobado antes de enviarlo que
+el archivo era UTF-8 sin BOM —los tres primeros bytes son `46 61 73`, no
+`ef bb bf`, y la `á` de «catálogo» está guardada como `c3 a1` y no como el `e1`
+de CP1252— y después, que el mensaje guardado por git conserva sus 27 líneas con
+tildes, y que **autor y committer** llevan los dos la dirección `noreply`, sin
+ningún proveedor de correo personal.
+
+| Comprobación                                                                | Resultado                                                                          |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `index.html`                                                                | HTTP 200, **638 bytes**, y referencia los mismos recursos que el build local       |
+| JS publicado                                                                | `index-BpmhP4VQ.js`, **249.170 bytes, idéntico byte a byte** al local (`cmp`)      |
+| CSS publicado                                                               | `index-yYO2TO7R.css`, **16.482 bytes, idéntico byte a byte** al local (`cmp`)      |
+| `index.html`                                                                | **idéntico byte a byte** también                                                   |
+| Control negativo de `cmp`                                                   | comparar el JS con el CSS **sí** detecta la diferencia, así que `cmp` funciona     |
+| Cabeceras de seguridad                                                      | **4 de 4** de `vercel.json`, más `Strict-Transport-Security`                       |
+| Control de la búsqueda de cabeceras                                         | una cabecera inventada no aparece, así que no hay falsos positivos                 |
+| Sourcemaps (`.js.map`, `.css.map`)                                          | HTTP 404                                                                           |
+| **`e2e/` y sus seis archivos, `playwright.config.ts`, `tsconfig.e2e.json`** | **HTTP 404 los ocho** (petición del usuario)                                       |
+| `docs/privado/` y el PDF que contiene                                       | HTTP 404                                                                           |
+| Código fuente, documentación, configuración y rutas de ataque               | HTTP 404 en las **44 rutas probadas**                                              |
+| Control positivo de esos 404                                                | `/`, el JS y el favicon devuelven **200**, así que el 404 significa «no publicado» |
+
+**Los tres archivos publicados son los mismos que verificó la Fase 7**, con el
+mismo nombre y los mismos bytes. No es una casualidad ni un despliegue que no se
+haya hecho: es la consecuencia de que esta fase **no toque la aplicación**. Los
+nombres salen del contenido, así que un nombre igual es un contenido igual.
+
+Y conviene decir qué **no** podía demostrar esta comprobación, porque callarlo
+sería presentarla como más fuerte de lo que es: al ser los bytes idénticos a los
+de la fase anterior, la comparación no distingue «Vercel ha desplegado este
+commit» de «Vercel sirve todavía el anterior». Lo que sí demuestra es que **lo
+que hay publicado coincide exactamente con este build**.
+
+**Y ese hueco lo cerró el usuario, con una evidencia que la comparación no podía
+dar.** En GitHub, el commit `77bd38e` muestra el check de despliegue de Vercel en
+verde, **1 de 1**: Vercel sí desplegó este commit. Así que las dos mitades de la
+afirmación están cubiertas, cada una por su medio: que el despliegue ocurrió lo
+dice el estado del check, y que lo desplegado es exactamente este build lo dice
+el `cmp`.
+
+La anotación vale sobre todo por lo que enseña del método. Una comprobación que
+no puede distinguir dos situaciones no se arregla repitiéndola ni afinándola:
+**se complementa con otra que mire desde otro sitio**. Y el primer paso para eso
+es haber dicho en voz alta qué era lo que no se podía demostrar, porque un hueco
+que no se nombra tampoco se cierra.
+
+### Que nada de los tests E2E viaja en el paquete publicado
+
+Es la comprobación propia de esta fase, y se hace con la pareja de marcadores que
+la hace válida: la misma búsqueda, sobre el mismo archivo, encuentra lo que tiene
+que estar y no encuentra lo que no.
+
+| Marcador                                                                     | Esperado | Resultado    |
+| ---------------------------------------------------------------------------- | -------- | ------------ |
+| `Agencia Ejemplo`, `Imprimir o guardar en PDF`, `Volver al configurador`     | presente | **presente** |
+| `A pagar el primer día`, `La numeración se lleva en este navegador`          | presente | **presente** |
+| `Escribe el nombre del cliente.`, `nombre@example.com`                       | presente | **presente** |
+| `configurador-presupuestos:budget-draft:v1`                                  | presente | **presente** |
+| `Comercial del Norte`, `ana@example.com` (datos de prueba)                   | ausente  | **ausente**  |
+| `ConfiguratorPage`, `DocumentPage`, `tabularHasta`, `exampleBudget`          | ausente  | **ausente**  |
+| `playwright`, `Playwright`, `emulateMedia`, `setFixedTime`, `localhost:4173` | ausente  | **ausente**  |
+| `ESTO-NO-EXISTE-EN-NINGUN-SITIO` (control negativo)                          | ausente  | ausente      |
+
+Las dos mitades juntas son lo que vale: **la aplicación entera está publicada y
+ni una sola línea de los recorridos de prueba lo está**. `nombre@example.com` sí
+viaja, porque es el mensaje de error que lee quien usa la aplicación;
+`ana@example.com` no, porque solo existe en los tests. Y `localhost:4173` ausente
+confirma que la dirección del servidor de pruebas no se ha colado en el paquete.
+
+---
+
 ## Pendiente y vigilado
 
 | #   | Asunto                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Cuándo                 |
@@ -2226,6 +2306,7 @@ normal. Ver el problema **P42** del registro de la fase.
 | 17  | **La ruta absoluta de trabajo, con el nombre de usuario de Windows, sigue en el historial y también en el árbol actual.** Entró en la Fase 1 en `docs/prompts/fase-00.md`; en la Fase 5 se sustituyó **en ese archivo** por `%USERPROFILE%\…`, pero los commits anteriores la conservan. **La revisión de la Fase 8 encontró que sigue viva en dos archivos más**, que la redacción anterior de este pendiente no nombraba: `docs/fase-00-inventario-entorno.md` (**7 apariciones**: la carpeta del proyecto, la ruta de Git, el Escritorio, OneDrive y el editor) y `docs/prompts/fase-01.md` (**1**, dentro de un prompt en el que el usuario aprobó expresamente dejar esas rutas tal cual, y que por eso las contiene). Así que no es una fuga, es una **decisión tomada** cuya lista de sitios estaba mal anotada. **Decidir en la Fase 10 si se limpia**, ahora con la lista completa, sabiendo que limpiar el historial obliga a reescribirlo y que el nombre del autor ya es público por la firma de los commits, que es intencionada | Fase 10                |
 | 18  | ~~**Nada en pantalla explica para qué sirven los meses.**~~ **resuelto en la Fase 6**: la pista bajo el selector de meses («Desde 12 meses: 10 % de descuento» → «Descuento por permanencia aplicado»), asociada al campo, y el motivo de cada descuento en el resumen, como pide el apartado 4.4 del prompt maestro. La pista comparte la condición con la estrategia, así que no puede anunciar un descuento que el presupuesto no lleva                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | —                      |
 | 19  | ~~**Decidir si se muestra el compromiso total de los servicios mensuales**~~ **resuelto en la Fase 6**: no se muestra. Sería una cuarta cifra confundible con un total, y encima parcial, porque no incluiría el pago inicial ni el anual ([ADR 0011](docs/adr/0011-sin-compromiso-total.md))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | —                      |
+| 20  | **El dominio genérico que la corrección C7-4 retiró del código sigue citado en la documentación.** La revisión de la Fase 8 contó los dominios uno a uno y encontró **13 apariciones** de ese dominio —el que está registrado por alguien y que la C7-4 sustituyó por los reservados de la RFC 2606—: 5 en este archivo, 7 en `docs/prompts/fase-07.md` y **1 en un comentario de `validateClientData.ts`** que explica precisamente por qué no se usa. Ninguna es una dirección utilizable: las 13 **describen la corrección**. Pero la norma C1-6 del apartado 5 de `CLAUDE.md` pide describir el dato en lugar de reproducirlo, y estas citas lo reproducen. **Decidir en la Fase 10** si se sustituyen por una descripción, sabiendo que se pierde parte de la claridad del relato y que el comentario del código es el que más valor pedagógico tiene. Este pendiente está redactado sin reproducir el dominio, a propósito                                                                                                              | Fase 10                |
 
 ### Riesgos abiertos (del inventario de la Fase 0)
 
