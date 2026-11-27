@@ -242,9 +242,17 @@ binarios que nadie había pedido. Se repitió con `grep -a`. El byte NUL venía
 precisamente del hallazgo del P48.
 
 **La lección no es «usar `-a`».** Es que el fallo no se parecía a un fallo: no
-hubo error, no hubo aviso, solo un número más bajo de lo que tocaba. Es el
-problema **P9** de la Fase 2 por tercera vez, y la única cosa que lo ha
-detectado las tres veces es el control positivo del apartado 5 de `CLAUDE.md`.
+hubo error, no hubo aviso, solo un número más bajo de lo que tocaba. Es la
+familia del problema **P9** de la Fase 2, que ya había reaparecido en la Fase 5
+con un escapado mal puesto: **dos veces más aquí dentro, en esta misma
+revisión**, y una tercera después, en el P49. Lo destapó el **control positivo**
+del apartado 5 de `CLAUDE.md` en la Fase 2 (P9), en la Fase 5 (P21) y aquí en la
+categoría 5b. Los otros dos de esta fase, no: el del byte NUL lo delató **una
+línea anómala en la salida** y el del P49, **la discrepancia con un recuento que
+ya se había medido un minuto antes** con otra herramienta. Conviene decirlo así
+en lugar de redondearlo: el control positivo lo destapó **tres de las cinco
+veces**, no es una red infalible, y las otras dos lo que salvó la revisión fue
+mirar la salida con desconfianza.
 
 ### P48 — El PDF ajeno seguía vivo en `.git`, como objeto no alcanzable
 
@@ -403,7 +411,62 @@ despliegue.
 
 ---
 
-## 6. Correcciones del usuario
+## 6. La verificación en producción (commit `1f639f8`)
+
+El `push` dejó el remoto en `1f639f8`, consultado **al servidor** con
+`git ls-remote` y con su control negativo. El mensaje se pasó con
+`git commit -F` desde un archivo fuera del proyecto, y el **objeto del commit lo
+guarda idéntico byte a byte**: 3.447 bytes los dos, con `diff` y con `cmp`.
+Detalle de método: `git log --format=%B` **añade un salto de línea al extraer**,
+así que la primera comparación acusó una diferencia que no era del commit; la
+comparación válida es contra `git cat-file commit HEAD`.
+
+| Comprobación                                                     | Resultado                                                                    |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **CI #3** sobre `1f639f8` (comprobado por el usuario)             | **Success**, 1 m 44 s, y el paso del informe de Playwright **saltado (0 s)** |
+| Checks del commit y despliegue                                   | **2 de 2**, «Deployment has completed»                                       |
+| **La CSP en producción**                                         | presente con **las ocho directivas exactas**, y también sobre el `.js`, el `.css` y el `favicon.svg` |
+| Las otras cuatro cabeceras                                       | 4 de 4, más `Strict-Transport-Security`. Control: una cabecera inventada no aparece |
+| Los cuatro archivos publicados                                   | **idénticos byte a byte** al build local, con el control negativo de `cmp`   |
+| Sourcemaps, `vercel.json`, `vite.config.ts`, `cspGuard.ts`, `dependabot.yml`, `/.git/config` | **404** los seis. Control positivo: `/` y el favicon dan 200        |
+| **En el navegador, con la consola abierta y recarga forzada** (comprobado por el usuario) | la aplicación **con sus estilos**, el borrador sobrevive a la recarga sin los datos del cliente, el documento y la impresión correctos, y la consola **sin un solo mensaje de CSP** |
+
+El único aviso de la consola es amarillo y de Chrome:
+`[Violation] 'click' handler took 2784ms`, en el botón de imprimir. **No tiene
+nada que ver con la CSP**: `window.print()` bloquea el hilo mientras el diálogo
+está abierto, y Chrome mide ese rato como trabajo del manejador.
+
+### Dependabot abrió tres pull requests el primer día
+
+No esperó al calendario: al subir `dependabot.yml` hizo su revisión inicial.
+
+| PR  | Qué propone                                                        | CI        | Qué demuestra                                                 |
+| --- | ------------------------------------------------------------------ | --------- | ------------------------------------------------------------- |
+| #1  | `typescript-eslint` 8.73 → 8.74, **en el grupo** `minor-and-patch` | **verde** | La agrupación funciona                                        |
+| #2  | `typescript` 6.0 → **7.0** (mayor)                                 | **rojo**  | **La red funcionando**                                        |
+| #3  | `@types/node` 24 → **26** (mayor)                                  | **verde** | Una mayor puede ser inofensiva: por eso van de una en una     |
+| —   | `github-actions`                                                   | ninguno   | Las cuatro acciones ya están en su mayor más reciente         |
+
+**El rojo de la #2 es el mejor resultado posible de la fase**, y hay que decirlo
+con precisión: una versión mayor de TypeScript rompió las comprobaciones **en un
+pull request y no en `main`**. El workflow de la Fase 9 la frenó, y Dependabot la
+trajo **por separado** —fuera del grupo de menores y parches— precisamente
+porque una mayor merece su propio registro de CI. Las tres se deciden en la
+Fase 11; no se ha aceptado ninguna, y **qué le ocurre a TypeScript 7 se
+diagnostica entonces, no se adivina aquí**.
+
+La cuarta fila es una confirmación discreta de la Fase 9: aquella fase consultó
+al registro las versiones de las acciones en lugar de escribirlas de memoria, y
+Dependabot, que es quien de verdad lo sabe, **no ha encontrado nada que
+actualizar**.
+
+**Candidato para el vídeo**, si hay hueco además de los dos momentos del
+apartado 9: la lista de pull requests de Dependabot con un check rojo entre dos
+verdes, que cuenta en una sola captura para qué sirve la integración continua.
+
+---
+
+## 7. Correcciones del usuario
 
 ### C10-1 — Un guardián que no se ha visto disparar no es un guardián
 
@@ -521,6 +584,78 @@ en un documento, aparecería por su identificador —una cadena larga y única�
 necesariamente por el patrón. Es la misma lógica que la del apartado 5 de
 `CLAUDE.md` cuando exige buscar categorías y no archivos conocidos, aplicada un
 nivel más abajo: buscar **el dato concreto** además de su forma.
+
+### C10-9 — No describas una captura que no has mirado
+
+**Corrección.** «La captura que Playwright guardó del fallo no la hemos mirado y
+probablemente ya no existe. No describas lo que muestra.»
+
+**Por qué.** Yo había escrito, en el momento para el vídeo, cómo se veía la
+aplicación con la hoja de estilos bloqueada —«texto negro sobre blanco, el
+presupuesto en una columna»—. Era **verosímil y no comprobado**: la carpeta está
+en el `.gitignore` y se sobrescribe en cada ejecución. Una descripción inventada
+dentro de un documento de evidencias contamina lo que sí está medido.
+
+### C10-10 — El riesgo R5, con precisión
+
+**Corrección.** «El inventario concluye que el proyecto está hoy fuera de
+OneDrive. Precisa que el riesgo es **si se activara** la copia del Escritorio.»
+
+**Por qué.** Mi frase hacía parecer que el PDF ajeno estaba sincronizándose en la
+nube. El riesgo es condicional y el inventario de la Fase 0 lo dejó comprobado y
+escrito; exagerarlo habría convertido un hallazgo real en una alarma falsa.
+
+### C10-11 — La evidencia, en el chat y como texto
+
+**Corrección.** «Pégame aquí en el chat, como texto, el `git diff` final de
+`README.md`, no dentro de la salida de un comando: es lo que voy a revisar.»
+
+**Por qué.** Es la C10-4 un paso más allá. No basta con que el dato esté en
+pantalla: tiene que estar **donde el supervisor lo lee**, y una salida de
+terminal que su pantalla recorta no cumple. Lo que se revisa antes de publicar
+un repositorio no puede depender de un desplazamiento.
+
+### C10-12 — «La categoría 4 fue 1, no 0», y el cuarto punto ciego
+
+**Corrección.** «En la categoría 4 el recuento anterior fue 1, no 0. Enséñame
+qué línea es y en qué archivo. Si es una ruta con mi usuario, hay que quitarla
+antes del commit.»
+
+**Por qué.** El `1` que recordaba era un recuento **por archivo** de la primera
+exploración, no un total, así que el dato que yo había dado era correcto. Pero la
+pregunta valió más que si hubiera acertado él: al ampliar la búsqueda apareció
+que **mi patrón solo cubría barras invertidas** (`C:\Users\…`) y no las barras
+normales de Git Bash (`/c/Users/…`), que son las que yo había usado durante toda
+la sesión. El recuento ampliado también dio 0, así que no hubo fuga —y por eso no
+cuenta como uno de los tres puntos ciegos del P47 y el P49—, pero era un punto
+ciego **potencial** que nadie había visto. Una comprobación que solo cubre una de
+las dos formas de escribir el dato es media comprobación.
+
+### C10-13 — El mensaje del commit también se revisa
+
+**Corrección.** «Pásale las búsquedas de la revisión al mensaje completo, porque
+`git grep --cached` no revisa los mensajes de commit.» Más dos retoques del
+texto: «control positivo **en cada una que dio cero**» y «dos puntos ciegos» →
+«tres», por no cuadrar con este documento.
+
+**Por qué.** Es un hueco de verdad en mi revisión, y de los que no se ven: el
+mensaje vive **fuera del árbol de trabajo**, así que ninguna de las dieciséis
+búsquedas lo alcanzaba, y en cambio se publica con el commit y es **inmutable
+sin reescribir el historial**. El historial de este proyecto ya tiene un dominio
+citado en un mensaje (`835940f`) que se queda precisamente por eso.
+
+### C10-14 — Dos números que no se podían sumar
+
+**Corrección.** «El resumen de `PROGRESO.md` dice dos puntos ciegos y el mensaje
+del commit dice tres. Compáralo con lo que cuentan los dos documentos y dime
+cuál es el correcto **antes de cambiar nada**.»
+
+**Por qué.** Los dos números eran correctos y se referían a ámbitos distintos
+—dos en la revisión del historial, tres en la fase—, que es la misma familia del
+P45 y de la C9-5: **cifras escritas al lado que no se pueden sumar a la vista**.
+La corrección no pedía elegir un número, pedía **que el ámbito estuviera
+escrito**. Y el «antes de cambiar nada» evitó el arreglo fácil: cambiar el dígito
+habría dejado el documento cuadrado y el reparto sin explicar.
 
 ---
 

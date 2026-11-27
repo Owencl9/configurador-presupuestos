@@ -10,11 +10,18 @@ directivas, con `default-src 'none'` y sin `unsafe-inline`, y un **guardián en
 los tests E2E que los pone en rojo si el navegador bloquea algo** —demostrado
 con un control positivo que dejó los 5 recorridos en rojo—; **Dependabot** para
 `npm` y `github-actions`; la **revisión de las 11 categorías sobre los 20
-commits del historial**, que destapó dos puntos ciegos del propio método y **el
+commits del historial**, que destapó **dos puntos ciegos del propio método
+—tres en la fase entera—** y **el
 PDF ajeno vivo como objeto no alcanzable** en `.git` (limpiado con
 autorización, y demostrado que nunca llegó a GitHub); y los **pendientes nº 17
 y nº 20 resueltos**. Siguen **560 tests de Vitest y 5 recorridos de
 Playwright**.
+**Verificado en producción** (commit `1f639f8`): la CSP sirviéndose con sus ocho
+directivas también sobre los recursos, los cuatro archivos publicados idénticos
+byte a byte al build local, **CI #3 en Success** y la aplicación, el borrador, el
+documento y la impresión comprobados en el navegador **con la consola sin un
+solo mensaje de CSP**. Y Dependabot ya ha abierto sus tres primeros pull
+requests, uno de ellos **frenado por el workflow**.
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**privado todavía**: la visibilidad la cambia el usuario a mano siguiendo
 [docs/fase-10-publicacion-github.md](docs/fase-10-publicacion-github.md))
@@ -2714,8 +2721,13 @@ configuración.
 2. **`grep` abandonó una enumeración** al toparse con un byte NUL, por el mismo
    tipo de filtro. El byte venía del hallazgo siguiente.
 
-Es el problema **P9** de la Fase 2 por tercera vez. Ninguno de los dos dio un
-error: dieron un número más bajo del que tocaba.
+Ninguno de los dos dio un error: dieron un número más bajo del que tocaba.
+
+**El tercero de la fase llegó después y fuera de esta revisión**, al limpiar el
+árbol para el pendiente nº 17: un patrón con las barras invertidas mal escapadas
+devolvió vacío sobre un archivo que sí las contenía. El mensaje del commit
+`1f639f8` cuenta los tres juntos bajo este epígrafe; el reparto correcto es
+**dos aquí y uno allí**, y se deja dicho aquí en lugar de reescribir el commit.
 
 ### El PDF ajeno estaba en `.git`, sin estar en ningún commit
 
@@ -2846,7 +2858,10 @@ nueve fases dependiendo de que alguien se acordara.
   CSP directiva por directiva y cómo se comprueba, y Dependabot— y el enlace a
   la lista de publicación.
 - `docs/prompts/fase-10.md`: el registro de la fase, con **cuatro problemas
-  (P47 a P50)** y **ocho correcciones del usuario (C10-1 a C10-8)**.
+  (P47 a P50)** y **catorce correcciones del usuario (C10-1 a C10-14)**, más que
+  en ninguna otra fase —la que más tenía era la 4, con once—, y seis de ellas
+  llegaron mientras el usuario revisaba los documentos que esta fase estaba
+  escribiendo.
 - `.github/workflows/ci.yml`: el comentario que daba el repositorio por privado.
 - **Ningún ADR nuevo.** Las dos decisiones con fondo —no reescribir el historial
   y describir el dominio en lugar de reproducirlo— son decisiones sobre datos
@@ -2925,6 +2940,105 @@ hace y se reporta en el chat, sin volver a tocar el archivo.
 
 ---
 
+## Verificación en producción (commit `1f639f8`)
+
+Hecha el 27/11/2026 sobre https://configurador-presupuestos.vercel.app, después
+del `push`. El SHA remoto se consultó **al servidor** con `git ls-remote`, no al
+caché local de `origin/main`, y coincide con el local:
+`1f639f83096af21d57442fbb3eac1657dd6df8ae`. Con su control negativo: la misma
+comparación contra el commit anterior **no** coincide.
+
+**El mensaje del commit se escribió en un archivo fuera del proyecto y se pasó
+con `git commit -F`** (como en las fases 6 a 9), comprobado antes que era UTF-8
+sin BOM —primeros bytes `46 61 73`, 51 bytes `c3` de letras acentuadas y **0**
+bytes `f3` de CP1252— y después, que el mensaje **guardado en el objeto del
+commit es idéntico byte a byte** al archivo de origen: 3.447 bytes los dos, con
+`diff` y con `cmp`, y cada uno con su control negativo contra el mensaje del
+commit anterior. Autor y committer, los dos con la dirección `noreply`.
+
+Un detalle de método que merece quedar escrito, porque la primera comprobación
+pareció fallar: `git log --format=%B` **añade un salto de línea al extraer**, así
+que el `diff` contra el archivo daba una diferencia de una línea en blanco. No
+era del commit. La comparación válida es contra el objeto en crudo
+(`git cat-file commit HEAD`), y ahí no hay diferencia.
+
+### La integración continua y el despliegue (comprobado por el usuario)
+
+| Comprobación                        | Resultado                                         |
+| ----------------------------------- | ------------------------------------------------- |
+| Ejecución **CI #3** sobre `1f639f8` | **Success**, 1 m 44 s, todos los pasos en verde   |
+| El paso del informe de Playwright   | **saltado (0 s)**: los recorridos pasaron         |
+| Checks del commit                   | **«All checks have passed», 2 de 2**: CI y Vercel |
+| Despliegue de Vercel                | **«Deployment has completed»**                    |
+
+### Las cabeceras y los archivos publicados
+
+| Comprobación                                                                                                                   | Resultado                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| **`Content-Security-Policy`**                                                                                                  | presente, con **las ocho directivas exactas** de `vercel.json`                  |
+| Las otras cuatro cabeceras                                                                                                     | **4 de 4**, más `Strict-Transport-Security` de Vercel                           |
+| Control de la búsqueda de cabeceras                                                                                            | una cabecera inventada no aparece: no hay falsos positivos                      |
+| **La CSP también sobre los recursos**, no solo sobre el HTML                                                                   | presente en el `.js`, el `.css` y el `favicon.svg`, los tres con HTTP 200       |
+| `index.html`                                                                                                                   | **638 bytes, idéntico byte a byte** al build local (`cmp`)                      |
+| JS publicado                                                                                                                   | `index-BpmhP4VQ.js`, **249.170 bytes, idéntico byte a byte**                    |
+| CSS publicado                                                                                                                  | `index-yYO2TO7R.css`, **16.482 bytes, idéntico byte a byte**                    |
+| `favicon.svg`                                                                                                                  | **9.522 bytes, idéntico byte a byte**                                           |
+| Control negativo de `cmp`                                                                                                      | comparar el JS con el CSS **sí** detecta la diferencia                          |
+| Sourcemaps (`.js.map`)                                                                                                         | HTTP 404                                                                        |
+| **`vercel.json`, `vite.config.ts`, `e2e/cspGuard.ts`, `.github/dependabot.yml`, el documento de publicación y `/.git/config`** | HTTP **404** los seis                                                           |
+| Control positivo de esos 404                                                                                                   | `/` y `/favicon.svg` devuelven **200**, así que el 404 significa «no publicado» |
+
+**Van cuatro fases consecutivas con los mismos cuatro archivos**, y esta vez
+además con la CSP delante: una cabecera no cambia un byte del contenido.
+
+### La CSP en un navegador de verdad (comprobado por el usuario)
+
+Con la consola abierta y **recarga forzada**, que es lo que descarta que se esté
+viendo una copia en caché:
+
+| Recorrido                 | Resultado                                                                                                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| La aplicación             | **con sus estilos**, que es justo lo que el control positivo del guardián rompía                                                                                    |
+| El borrador tras recargar | **sobrevive**: vuelve al configurador con el presupuesto y **sin los datos del cliente**, como fija el [ADR 0013](docs/adr/0013-datos-del-cliente-no-se-guardan.md) |
+| El documento              | `PRE-2026-0004`, correcto                                                                                                                                           |
+| La vista de impresión     | correcta                                                                                                                                                            |
+| **La consola**            | **«No issues»: ni un error, y ni un mensaje de CSP**                                                                                                                |
+
+Con «All levels» aparece **un aviso amarillo, y conviene decir qué es en lugar de
+omitirlo**: `[Violation] 'click' handler took 2784ms`, de Chrome, en el botón de
+imprimir. No es un error ni tiene nada que ver con la CSP: `window.print()`
+**bloquea el hilo mientras el diálogo de impresión está abierto**, y Chrome mide
+ese tiempo como si fuera trabajo del manejador. Los 2,8 segundos son el rato que
+el diálogo estuvo abierto, no una lentitud de la aplicación.
+
+### Dependabot, funcionando desde el primer minuto
+
+No esperó al calendario mensual: al subir `dependabot.yml` hizo su **revisión
+inicial** y abrió **3 pull requests**.
+
+| PR  | Qué propone                                                        | CI        | Qué demuestra                                                    |
+| --- | ------------------------------------------------------------------ | --------- | ---------------------------------------------------------------- |
+| #1  | `typescript-eslint` 8.73 → 8.74, **en el grupo** `minor-and-patch` | **verde** | La agrupación funciona: los menores y parches van juntos         |
+| #2  | `typescript` 6.0 → **7.0** (mayor)                                 | **rojo**  | **La red funcionando** (ver abajo)                               |
+| #3  | `@types/node` 24 → **26** (mayor)                                  | **verde** | Una mayor puede ser inofensiva, y por eso se miran de una en una |
+| —   | `github-actions`                                                   | ninguno   | Las cuatro acciones ya están en su versión mayor más reciente    |
+
+**El rojo de la #2 es el mejor resultado posible de esta fase**, y conviene
+decirlo con precisión: una versión mayor de TypeScript rompió las comprobaciones
+**en un pull request**, no en `main`. El workflow de la Fase 9 la frenó antes de
+llegar a ninguna parte, y Dependabot la trajo por separado —y no dentro del
+grupo de menores y parches— precisamente porque una mayor merece su propio
+registro de CI. Las tres se deciden en la Fase 11; no se ha aceptado ninguna.
+**Qué le pasa exactamente a TypeScript 7 se diagnostica entonces**, al decidir
+el pull request, y no se adivina aquí.
+
+Y la cuarta fila es una confirmación discreta de la Fase 9: aquella fase
+consultó las versiones de las acciones al registro en lugar de escribirlas de
+memoria, y Dependabot, que es quien de verdad lo sabe, **no ha encontrado nada
+que actualizar**.
+
+---
+
 ## Pendiente y vigilado
 
 | #   | Asunto                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Cuándo                 |
@@ -2983,12 +3097,19 @@ público:
 | **Protección de push** del escaneo de secretos       | El escaneo se activa solo en repositorios públicos, pero **la protección no**: avisa en lugar de impedir    |
 | **«Require approval for all external contributors»** | Con el repositorio público, cualquiera puede abrir un pull request desde un fork, y eso ejecuta el workflow |
 
-Y **después del `push` quedan dos comprobaciones que no se pueden hacer desde
-aquí**, igual que en las fases anteriores: que la **CSP esté en producción y no
-rompa nada** —la aplicación, el borrador tras recargar, el documento y la
-impresión, con la consola abierta— y que el **check de Vercel** siga en verde.
-La CSP ya se ha probado contra el build local con la cabecera real, así que lo
-que falta por ver es el servidor, no la política.
+Las comprobaciones que no se podían hacer desde este equipo **ya están hechas**,
+y las tres necesitaban el `push`:
+
+| Qué había que ver                                              | Resultado                                                      |
+| -------------------------------------------------------------- | -------------------------------------------------------------- |
+| El workflow **en verde** con la CSP y el guardián nuevos       | **CI #3 en Success**, 1 m 44 s                                 |
+| La **CSP en producción sin romper nada**, en un navegador real | los cuatro recorridos bien y **consola sin un mensaje de CSP** |
+| El **despliegue de Vercel**                                    | **2 de 2 checks**, «Deployment has completed»                  |
+
+La segunda no era una formalidad: el guardián de los E2E prueba la cabecera
+contra el build local, pero quien la sirve en producción es Vercel. **La
+cabecera en sí se lee con `curl`** —y así se leyó—; lo que solo se ve en un
+navegador real es **su efecto**: qué bloquea.
 
 **Siguiente, Fase 11 — Entrega del TFM:** README final, ADR revisados, el
 favicon (pendiente nº 2), la renumeración de los problemas (pendiente nº 22), la
