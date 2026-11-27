@@ -461,16 +461,30 @@ apartado 5). **La segunda está pendiente y por eso tiene su hueco escrito aquí
 abajo**, en lugar de darse por hecha: las dos cosas que faltan necesitan el
 `push`.
 
-| Qué falta comprobar                                            | Dónde se mira                                 | Resultado          |
-| -------------------------------------------------------------- | --------------------------------------------- | ------------------ |
-| Que `npm ci` del workflow no falle por el script `prepare`      | Pestaña **Actions**, paso «Instalar las dependencias exactas del lock» | _pendiente_ |
-| Que el workflow termine **en verde** con sus seis comprobaciones | Pestaña **Actions**                           | _pendiente_        |
-| Que el **despliegue de Vercel** salga bien                     | El check del commit en GitHub, y la URL pública | _pendiente_      |
+**Comprobado por el usuario en GitHub sobre el commit `e62115e`:**
 
-Esta tabla se completa en el commit de verificación, como se hizo en las fases
-6, 7 y 8. **Mientras tenga huecos, la fase no está verificada**, solo escrita:
-la comprobación del gancho en local no dice nada de lo que hacen los dos
-servidores, que es exactamente lo que el usuario pidió mirar.
+| Qué había que comprobar                                          | Dónde se miró                                                          | Resultado                                        |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------ |
+| Que `npm ci` del workflow no falle por el script `prepare`        | Pestaña **Actions**, paso «Instalar las dependencias exactas del lock» | **en verde, 7 s**                                |
+| Que el workflow termine **en verde** con sus seis comprobaciones  | Pestaña **Actions**, ejecución **CI #1**                               | **Success**, 1 m 55 s (el job, 1 m 52 s)         |
+| Que el **despliegue de Vercel** salga bien                        | Los checks del commit                                                  | **«All checks have passed», 2 de 2**             |
+| Que la aplicación siga funcionando                                | La URL pública, a mano en el navegador                                 | **carga y funciona**                             |
+
+Con eso la corrección queda cerrada por sus dos mitades, cada una en su
+servidor: `prepare` no rompe la instalación de GitHub Actions —7 segundos, el
+paso en verde— ni la de Vercel —el despliegue completado—. **La comprobación en
+local no podía decir nada de ninguna de las dos**, y era el motivo de la
+corrección.
+
+Dos detalles de esa ejecución que valen como evidencia de que el workflow está
+bien escrito, y no solo de que pasó:
+
+- **El paso del informe de Playwright se saltó (0 s) y la sección de artefactos
+  quedó vacía.** Es exactamente lo que tenía que ocurrir: su condición es
+  `failure() && steps.e2e.outcome == 'failure'`, y los recorridos pasaron. Un
+  artefacto subido ahí habría significado que la condición estaba mal escrita.
+- **El resumen de Vitest en el servidor coincide con el local**: 45 archivos,
+  560 de 560. El mismo número en dos máquinas distintas, una de ellas Linux.
 
 ### C9-3 — El informe del fallo, pero solo del fallo
 

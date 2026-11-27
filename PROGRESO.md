@@ -12,6 +12,9 @@ sentencias) y dos deudas cerradas: la **aserción negativa hueca** que anotó la
 Fase 7 —ahora con su control positivo dentro del test, vista en rojo— y el
 **duplicado** entre `buildPriceLabel` y `formatEuros`, agrupado sin perder un
 solo caso. Siguen **560 tests de Vitest y 5 recorridos de Playwright**.
+**Verificado en producción** (commit `e62115e`): el workflow en verde en su
+primera ejecución, con los 560 tests pasando también en Linux, y los cuatro
+archivos publicados idénticos byte a byte al build local.
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**privado** hasta la Fase 10)
 **Aplicación desplegada:** https://configurador-presupuestos.vercel.app
@@ -2568,6 +2571,93 @@ buena una cifra medida antes de escribir el párrafo que la comenta.
 
 ---
 
+## Verificación en producción (commit `e62115e`)
+
+Hecha el 26/11/2026 sobre https://configurador-presupuestos.vercel.app, después
+del `push`. El SHA remoto se consultó **al servidor** con `git ls-remote`, no al
+caché local de `origin/main`, y coincide con el local:
+`e62115e7aea00850b78887e10dc2d516fd8da823`. Con su control negativo: la misma
+comparación contra el commit anterior **no** coincide, así que la comparación
+funciona. Árbol de trabajo limpio.
+
+**El mensaje del commit se escribió en un archivo fuera del proyecto y se pasó
+con `git commit -F`** (como en las fases 6, 7 y 8). Comprobado antes de enviarlo
+que era UTF-8 sin BOM —los tres primeros bytes son `46 61 73`, no `ef bb bf`, y
+la `ó` de «código» está guardada como `c3 b3` y no como el `f3` de CP1252— y
+después, que el mensaje guardado por git es **idéntico al archivo de origen**
+(con `diff`, y con el control negativo que confirma que `diff` detecta
+diferencias cuando las hay) y que **autor y committer** llevan los dos la
+dirección `noreply`.
+
+### La integración continua, en su primera ejecución (comprobado por el usuario)
+
+| Comprobación                                             | Resultado                                               |
+| -------------------------------------------------------- | ------------------------------------------------------- |
+| Ejecución **CI #1** sobre `e62115e`                      | **Success**, 1 m 55 s en total (el job, 1 m 52 s)       |
+| `npm ci`, el paso donde se ejecuta el `prepare` de Husky | **en verde, 7 s**                                       |
+| Tests de Vitest **en el servidor**                       | **45 archivos y 560 de 560**, igual que en este equipo  |
+| El paso del informe de Playwright                        | **saltado (0 s)** y la sección de artefactos **vacía**  |
+| Checks del commit                                        | **«All checks have passed», 2 de 2**: CI y Vercel       |
+| Despliegue de Vercel                                     | **«Deployment has completed»**                          |
+| La aplicación en producción                              | **carga y funciona**, comprobado a mano en el navegador |
+
+**El paso saltado es evidencia, no una ausencia.** Su condición es
+`failure() && steps.e2e.outcome == 'failure'`, y los recorridos pasaron: un
+artefacto subido ahí habría significado que la condición estaba mal escrita. Y
+con los 560 tests dando el mismo número en Linux y en Windows queda cerrado de
+hecho el riesgo que la Fase 8 anticipó al fijar el idioma y la zona horaria en
+`playwright.config.ts`.
+
+Con esto queda cerrada la corrección **C9-2** por sus dos mitades, cada una en
+su servidor: el script `prepare` no rompe la instalación de GitHub Actions ni la
+de Vercel. La comprobación en local no podía decir nada de ninguna de las dos.
+
+### Los archivos publicados
+
+| Comprobación                                                      | Resultado                                                                                        |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `index.html`                                                      | HTTP 200, **638 bytes**, **idéntico byte a byte** al build local (`cmp`)                         |
+| JS publicado                                                      | `index-BpmhP4VQ.js`, **249.170 bytes, idéntico byte a byte**                                     |
+| CSS publicado                                                     | `index-yYO2TO7R.css`, **16.482 bytes, idéntico byte a byte**                                     |
+| `favicon.svg`                                                     | **9.522 bytes, idéntico byte a byte**                                                            |
+| Control negativo de `cmp`                                         | comparar el JS con el CSS **sí** detecta la diferencia, así que `cmp` funciona                   |
+| Cabeceras de seguridad                                            | **4 de 4** de `vercel.json`, más `Strict-Transport-Security`                                     |
+| Control de la búsqueda de cabeceras                               | una cabecera inventada no aparece, así que no hay falsos positivos                               |
+| Sourcemaps (`.js.map`, `.css.map`)                                | HTTP 404                                                                                         |
+| **`.github/workflows/ci.yml`, `.husky/pre-commit` y `coverage/`** | **HTTP 404 las tres, y también sus carpetas** (petición del usuario)                             |
+| Código fuente, documentación, configuración y rutas de ataque     | HTTP 404 en las **20 rutas probadas**                                                            |
+| Control positivo de esos 404                                      | `/`, `index.html`, el favicon y el JS devuelven **200**, así que el 404 significa «no publicado» |
+
+**Los cuatro archivos son los mismos que verificaron las fases 7 y 8**, con el
+mismo nombre y los mismos bytes, y van **tres fases consecutivas**. No es un
+despliegue que no se haya hecho: el check de Vercel de este commit está en
+verde. Es la consecuencia de que estas fases no toquen la aplicación.
+
+### Que nada de las herramientas de esta fase viaja en el paquete publicado
+
+Con la pareja de marcadores que hace válida la comprobación: la misma búsqueda,
+sobre el mismo archivo, encuentra lo que tiene que estar y no encuentra lo que no.
+
+| Marcador                                                                           | Esperado | Resultado    |
+| ---------------------------------------------------------------------------------- | -------- | ------------ |
+| `Tu presupuesto`, `A pagar el primer día`, `Imprimir o guardar en PDF`             | presente | **presente** |
+| `Escribe el nombre del cliente.`, la clave del borrador                            | presente | **presente** |
+| **`Escribe un correo con el formato`** — el mensaje que vigila el test arreglado   | presente | **presente** |
+| `ubuntu-latest`, `actions/checkout`, `cancel-in-progress`, `timeout-minutes`       | ausente  | **ausente**  |
+| `husky`, `pre-commit`, `format:check`, `jsx-a11y`, `ms-playwright`                 | ausente  | **ausente**  |
+| `CONTROL-TEMPORAL` y `FORMATO-ROTO-TEMPORAL`, los dos archivos temporales borrados | ausente  | **ausente**  |
+| `delega el formato`, el título del `it.each` nuevo                                 | ausente  | **ausente**  |
+| `ESTO-NO-EXISTE-EN-NINGUN-SITIO` (control negativo)                                | ausente  | ausente      |
+
+**La fila del medio es la que más dice de esta fase.** El mensaje del correo
+**sí** viaja en el paquete publicado, y por eso importaba que su test lo
+vigilara de verdad: es texto que lee quien usa la aplicación. Las dos filas de
+los archivos temporales confirman lo otro: ni el archivo de control de
+accesibilidad ni el que se usó para ver fallar el gancho llegaron a ninguna
+parte.
+
+---
+
 ## Pendiente y vigilado
 
 | #   | Asunto                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Cuándo                         |
@@ -2609,25 +2699,23 @@ buena una cifra medida antes de escribir el párrafo que la comenta.
 
 ## Siguiente paso
 
-**La Fase 9 está cerrada** en el repositorio local. La aplicación sigue
+**La Fase 9 está cerrada y verificada en producción.** La aplicación sigue
 funcionalmente completa y esta fase tampoco le ha añadido nada: los nombres de
 los archivos compilados son, por tercera fase consecutiva, idénticos a los de la
-Fase 7.
+Fase 7, y esta vez además **idénticos byte a byte**.
 
-**Queda una verificación que no se puede hacer desde este equipo**, y por tanto
-la fase no está verificada hasta que se haga. Son las dos mitades del encargo
-del usuario y las dos necesitan el `push`:
+Las dos comprobaciones que no se podían hacer desde este equipo **ya están
+hechas**, y las dos necesitaban el `push`:
 
-| Qué hay que ver                                      | Dónde                                             |
-| ---------------------------------------------------- | ------------------------------------------------- |
-| El workflow **en verde**, con sus seis pasos         | Pestaña **Actions** del repositorio en GitHub     |
-| El **despliegue de Vercel en verde** (petición C9-2) | El check de Vercel en el commit, y la URL pública |
+| Qué había que ver                                     | Resultado                                     |
+| ----------------------------------------------------- | --------------------------------------------- |
+| El workflow **en verde**, con sus seis comprobaciones | **CI #1 en Success**, 1 m 55 s                |
+| El **despliegue de Vercel en verde** (petición C9-2)  | **2 de 2 checks**, «Deployment has completed» |
 
-La segunda no es una formalidad: el script `prepare` de Husky se ejecuta
-**también en la instalación de Vercel**, así que el despliegue es la única
-prueba de que no la ha roto. La herramienta `gh` no está instalada —decisión del
-usuario— y el repositorio es privado, así que esta comprobación la hace él y se
-anota después en `docs/prompts/fase-09.md`.
+La segunda no era una formalidad: el script `prepare` de Husky se ejecuta
+**también en la instalación de Vercel**, así que el despliegue era la única
+prueba de que no la había roto. Las comprobó el usuario en GitHub, porque la
+herramienta `gh` no está instalada —decisión suya— y el repositorio es privado.
 
 **Siguiente, Fase 10 — GitHub y despliegue:** revisión de secretos,
 **repositorio público**, Dependabot, la cabecera `Content-Security-Policy` y la
