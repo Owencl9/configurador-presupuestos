@@ -175,6 +175,11 @@ dos espacios al final son un salto intencionado— y que el editor use **el
 TypeScript del proyecto**, para que informe exactamente de los mismos errores
 que `npm run build`.
 
+Los cinco recorridos del último escalón comprueban además, desde la Fase 10, que
+**el navegador no ha bloqueado nada por la `Content-Security-Policy`**: lo
+vigila [`e2e/cspGuard.ts`](e2e/cspGuard.ts), explicado en el apartado del
+despliegue.
+
 **Los tests de Playwright no están en el gancho de pre-commit**, a propósito:
 necesitan compilar la aplicación, levantar un servidor y abrir un navegador, y
 eso haría insoportable cada commit. Los ejecuta la integración continua.
@@ -449,11 +454,11 @@ lo comprueban sobre el contenido real del navegador.
   con el teclado**
 - ✅ Reglas automáticas de accesibilidad en el lint, gancho de pre-commit e
   integración continua en cada push y pull request
+- ✅ `Content-Security-Policy` estricta, vigilada por los tests E2E, y
+  Dependabot para las dependencias y para las acciones del workflow
 
 ### Previstas
 
-- Repositorio público con su revisión de secretos, Dependabot y la cabecera
-  `Content-Security-Policy` (Fase 10)
 - Slides y vídeo de demostración (Fase 11)
 
 ## Despliegue
@@ -466,19 +471,71 @@ sirve el contenido de `dist/`.
 El proyecto **no usa ninguna variable de entorno**, de modo que no hay secretos
 que gestionar en el despliegue ([ADR 0002](docs/adr/0002-sin-backend.md)).
 
-`vercel.json` añade cuatro cabeceras de seguridad a todas las respuestas:
+`vercel.json` añade cinco cabeceras de seguridad a todas las respuestas:
 
-| Cabecera                                           | Para qué                                          |
-| -------------------------------------------------- | ------------------------------------------------- |
-| `X-Content-Type-Options: nosniff`                  | el navegador no adivina el tipo de archivo        |
-| `Referrer-Policy: strict-origin-when-cross-origin` | no se filtra la URL completa al salir del sitio   |
-| `X-Frame-Options: DENY`                            | la página no puede incrustarse en un iframe ajeno |
-| `Permissions-Policy`                               | cámara, micrófono y geolocalización desactivados  |
+| Cabecera                                           | Para qué                                                    |
+| -------------------------------------------------- | ----------------------------------------------------------- |
+| `Content-Security-Policy`                          | de dónde puede cargar cada cosa la página: solo de sí misma |
+| `X-Content-Type-Options: nosniff`                  | el navegador no adivina el tipo de archivo                  |
+| `Referrer-Policy: strict-origin-when-cross-origin` | no se filtra la URL completa al salir del sitio             |
+| `X-Frame-Options: DENY`                            | la página no puede incrustarse en un iframe ajeno           |
+| `Permissions-Policy`                               | cámara, micrófono y geolocalización desactivados            |
 
-HTTPS y `Strict-Transport-Security` los sirve Vercel por defecto. La
-`Content-Security-Policy` se añadirá en la Fase 10, cuando la aplicación esté
-terminada y pueda probarse en un despliegue de vista previa: es la única
-cabecera que puede dejar la página en blanco si se escribe mal.
+HTTPS y `Strict-Transport-Security` los sirve Vercel por defecto.
+
+### La Content-Security-Policy
+
+```
+default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self';
+object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+```
+
+Se puede ser así de estricto porque **la aplicación no carga nada de fuera**: no
+hay fuentes web, ni imágenes externas, ni analítica, ni una sola petición de red
+después de la carga. `default-src 'none'` prohíbe todo por defecto y las demás
+directivas son las excepciones, las cuatro limitadas al propio origen. **No hay
+`unsafe-inline` ni `unsafe-eval`**, que es donde una CSP se queda normalmente a
+medias: sin ellos, un script o un estilo inyectado en el HTML no se ejecuta
+aunque llegue a la página.
+
+Dos detalles con su motivo: `frame-ancestors 'none'` hace lo mismo que
+`X-Frame-Options`, y **las dos se quedan** porque no todos los navegadores
+entienden la primera; y `form-action 'none'` se puede poner porque el formulario
+del cliente no navega nunca —su envío se resuelve en el navegador— lo cual
+también lo comprueba un recorrido E2E.
+
+`vercel.json` es JSON validado contra un esquema, así que **no admite
+comentarios**: el razonamiento de cada directiva está en
+[`docs/prompts/fase-10.md`](docs/prompts/fase-10.md).
+
+**Cómo se comprueba, que es la parte interesante.** Las cabeceras las sirve
+Vercel, y los tests E2E no se ejecutan contra Vercel sino contra `vite preview`.
+Para que los recorridos prueben la CSP de verdad y no una copia:
+
+- **`vite.config.ts` lee `vercel.json`** y sirve esas mismas cabeceras en el
+  `preview`. La CSP tiene una sola fuente, así que no puede desfasarse respecto
+  a la de producción. En el servidor de desarrollo no se aplica, a propósito: el
+  recambio en caliente necesita código en línea.
+- **[`e2e/cspGuard.ts`](e2e/cspGuard.ts) pone cualquier recorrido en rojo** si
+  el navegador registra una violación, por dos vías a la vez: el evento
+  `securitypolicyviolation` y los mensajes de la consola. Hace falta porque una
+  CSP mal escrita no rompe la página de forma visible: si bloqueara la hoja de
+  estilos, la aplicación se serviría **sin un solo estilo** y los cinco
+  recorridos seguirían en verde, porque buscan textos, roles y foco. Se
+  comprobó quitando `style-src` a propósito: **los 5 se pusieron en rojo, y solo
+  por el guardián**.
+
+### Dependabot
+
+[`.github/dependabot.yml`](.github/dependabot.yml) vigila **dos ecosistemas**:
+`npm` y `github-actions`. El segundo no es opcional: las acciones del workflow
+están fijadas por versión mayor y no aparecen en ningún `package.json`, así que
+sin él nadie las actualizaría nunca.
+
+Revisión **mensual**, con los menores y parches **agrupados en un solo pull
+request** por ecosistema y las versiones **mayores por separado**, porque una
+mayor puede cambiar el comportamiento de una herramienta y merece que alguien la
+lea. Las alertas de seguridad son otra cosa y no dependen de ese calendario.
 
 ## Metodología
 
@@ -517,5 +574,6 @@ cabecera que puede dejar la página en blanco si se escribe mal.
 - [Especificación del proyecto](docs/prompt-maestro.md)
 - [Decisiones previas al desarrollo](docs/decisiones-previas.md)
 - [Inventario del entorno (Fase 0)](docs/fase-00-inventario-entorno.md)
+- [Publicación del repositorio y ajustes de seguridad de GitHub (Fase 10)](docs/fase-10-publicacion-github.md)
 - [Estado del desarrollo](PROGRESO.md)
 - [Normas del proyecto](CLAUDE.md)

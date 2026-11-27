@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './cspGuard'
 
 import { DOCUMENTO, FECHA_FIJA, SERVICIOS } from './exampleBudget'
 import { ConfiguratorPage } from './pages/ConfiguratorPage'

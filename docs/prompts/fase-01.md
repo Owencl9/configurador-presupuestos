@@ -66,7 +66,14 @@ Ver las correcciones **C1-6** y **C1-7**.
 
 ### Prompt 6 — Aprobación del commit y publicación
 
-> Apruebo la lista y el mensaje. Haz el commit. De acuerdo con dejar las rutas `C:\Users\Owen`.
+> Apruebo la lista y el mensaje. Haz el commit. De acuerdo con dejar las rutas `[ruta del perfil de usuario de Windows]`.
+
+_(Cita redactada en la Fase 10, pendiente nº 17: el prompt original escribía la
+carpeta de perfil real. Se sustituye por una descripción entre corchetes, con
+esta marca visible, porque el repositorio se hace público en esta fase. Una
+redacción señalada no falsifica el registro; borrarla sin decirlo, sí. Es la
+misma norma del apartado 5 de `CLAUDE.md` que ya actuó en la **C1-6**, y el
+mismo criterio de la cita redactada del Prompt 5.)_
 >
 > Ya he creado el repositorio privado en GitHub (sin README, sin `.gitignore` y sin licencia). Conéctalo y sube el código. Antes del push, enséñame el comando que vas a ejecutar.
 

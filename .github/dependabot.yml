@@ -1,0 +1,114 @@
+# =============================================================================
+# DEPENDABOT — ACTUALIZACIONES DE VERSIÓN (FASE 10)
+# =============================================================================
+#
+# El apartado 5 del prompt maestro pide activar Dependabot antes de publicar.
+# Este archivo configura las **actualizaciones de versión**: las que llegan por
+# calendario porque hay una versión nueva, haya o no un problema de seguridad.
+#
+# Las **alertas y actualizaciones de seguridad son otra cosa** y no se
+# configuran aquí: se activan en los ajustes del repositorio, no obedecen a este
+# calendario ni a estos grupos, y llegan en cuanto se publica un aviso sobre una
+# dependencia del `package-lock.json`. Las dos cosas se complementan: este
+# archivo evita el desfase lento, aquello cubre la urgencia.
+#
+# ## Dos ecosistemas, no uno
+#
+# `npm` es el evidente. `github-actions` hace falta porque las cuatro acciones
+# de `ci.yml` están fijadas por versión mayor (`actions/checkout@v7`, etc.) y
+# **nadie las actualizaría nunca**: no están en ningún `package.json`. La Fase 9
+# comprobó lo fácil que es escribirlas desfasadas: las versiones que se habrían
+# escrito de memoria estaban **dos y tres versiones mayores por detrás** de las
+# que había publicadas (se habría escrito `checkout@v5` y `cache@v4`, cuando ya
+# iban por la v7 y la v6). Y el aviso de desfase de una acción antigua no rompe
+# nada, así que no se ve.
+#
+# ## Por qué mensual y agrupado
+#
+# Decisión del usuario. Un proyecto de TFM que se entrega el 30/11/2026 no
+# necesita un pull request cada lunes; necesita no quedarse desfasado y no
+# ahogarse en avisos. Con los menores y parches **agrupados en un solo pull
+# request** por ecosistema, un mes tranquilo son dos pull requests en total. Las
+# versiones **mayores quedan fuera del grupo** a propósito: una mayor puede
+# romper el build o cambiar el comportamiento de una herramienta, así que merece
+# su propio pull request, su propio registro de CI y que alguien la lea.
+#
+# ## Lo que revisa cada pull request
+#
+# El gancho de pre-commit de Husky **no se ejecuta** en estos pull requests:
+# Dependabot no commitea desde un equipo, commitea por la API de GitHub. La
+# única red que los revisa es el workflow de `ci.yml`, que sí se dispara con
+# cada `pull_request`. Con el repositorio público esas ejecuciones no consumen
+# cuota.
+#
+# ## Pendiente nº 21, que es justo lo que este archivo tiene que destapar
+#
+# `package.json` lleva un `overrides` que fuerza a `eslint-plugin-jsx-a11y` a
+# aceptar ESLint 10, porque su 6.10.2 declara compatibilidad solo hasta la 9.
+# Ese `overrides` **silencia una comprobación de npm** y es temporal por
+# definición. Cuando Dependabot abra el pull request de la versión siguiente del
+# plugin, hay que mirar su rango de dependencias de pares: si ya admite
+# ESLint 10, se **retira el `overrides`** y se comprueba que el lint sigue dando
+# los mismos resultados. Dependabot sube la versión, pero no sabe por qué existe
+# el `overrides`, así que no lo va a quitar nadie si no está escrito aquí.
+#
+# ## Lo que no se puede arreglar desde este archivo
+#
+# Los mensajes de commit y la descripción de los pull requests de Dependabot
+# **están en inglés** y no son configurables más allá del prefijo. Es una
+# desviación del apartado 2 de `CLAUDE.md`, que pide los mensajes de commit en
+# español, y se deja anotada en lugar de disimulada.
+# =============================================================================
+
+version: 2
+
+updates:
+  # ---------------------------------------------------------------------------
+  # Las dependencias de npm (`package.json` y `package-lock.json` de la raíz)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      # `monthly` se ejecuta el primer día de cada mes. La hora y la zona se
+      # fijan por el mismo motivo que en `playwright.config.ts`: para que el
+      # momento no dependa de la zona del servidor que lo lance.
+      interval: monthly
+      time: '06:00'
+      timezone: Atlantic/Canary
+    # Con los menores y parches agrupados, este límite no se alcanza salvo que
+    # lleguen varias versiones mayores a la vez, que es cuando conviene el tope.
+    open-pull-requests-limit: 5
+    groups:
+      # El nombre del grupo acaba en el nombre de la rama que crea Dependabot,
+      # así que va en inglés (apartado 2 de `CLAUDE.md`).
+      minor-and-patch:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: deps
+      prefix-development: deps-dev
+
+  # ---------------------------------------------------------------------------
+  # Las acciones de los workflows (`.github/workflows/`)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+      time: '06:00'
+      timezone: Atlantic/Canary
+    # Son cuatro acciones y todas oficiales: con tres pull requests abiertos a la
+    # vez ya hay de sobra para no perder ninguna actualización.
+    open-pull-requests-limit: 3
+    groups:
+      minor-and-patch:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: ci

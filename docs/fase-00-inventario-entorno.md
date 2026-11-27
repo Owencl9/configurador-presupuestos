@@ -2,7 +2,15 @@
 
 **Fecha de comprobación:** 23/11/2026
 **Método:** comandos exclusivamente de lectura (sin instalaciones ni cambios de configuración).
-**Carpeta del proyecto:** `C:\Users\Owen\Desktop\Proyecto Final\configurador-presupuestos`
+**Carpeta del proyecto:** `%USERPROFILE%\Desktop\Proyecto Final\configurador-presupuestos`
+
+**Nota sobre las rutas (añadida en la Fase 10, pendiente nº 17):** las rutas
+absolutas de este documento se escriben con las variables de entorno de Windows
+—`%USERPROFILE%` y `%LOCALAPPDATA%`— en lugar de con la carpeta de perfil real.
+El dato se **describe en lugar de copiarse**, que es la norma del apartado 5 de
+`CLAUDE.md` nacida de la corrección C1-6. Las dos variables se expanden a la
+misma carpeta en el equipo del autor, así que los comandos del documento siguen
+siendo ejecutables tal cual.
 
 ---
 
@@ -29,7 +37,7 @@ El equipo es apto para el proyecto. No falta ningún programa esencial: Node.js,
 | PowerShell | 5.1.26100.9818 | 5.1 o superior | OK |
 | Node.js | v24.20.0 (`C:\Program Files\nodejs\node.exe`) | 20.19+ para Vite 7 | OK, con margen |
 | npm | 11.19.0 | incluido con Node | OK |
-| Git | 2.56.1.windows.1 (`C:\Users\Owen\AppData\Local\Programs\Git\cmd\git.exe`) | 2.40+ | OK |
+| Git | 2.56.1.windows.1 (`%LOCALAPPDATA%\Programs\Git\cmd\git.exe`) | 2.40+ | OK |
 | VS Code | instalado, CLI `code` disponible en el PATH | — | OK |
 | Extensión Claude Code | `anthropic.claude-code` | — | OK |
 | Espacio libre en C: | 357,5 GB | ~2 GB (node_modules + navegadores de Playwright) | OK, muy holgado |
@@ -40,9 +48,9 @@ El equipo es apto para el proyecto. No falta ningún programa esencial: Node.js,
 
 | Comprobación | Resultado |
 |---|---|
-| Carpeta real del Escritorio | `C:\Users\Owen\Desktop` |
-| Redirección en el registro (User Shell Folders → Desktop) | `C:\Users\Owen\Desktop` (sin redirigir) |
-| Carpeta de OneDrive en el equipo | `C:\Users\Owen\OneDrive` |
+| Carpeta real del Escritorio | `%USERPROFILE%\Desktop` |
+| Redirección en el registro (User Shell Folders → Desktop) | `%USERPROFILE%\Desktop` (sin redirigir) |
+| Carpeta de OneDrive en el equipo | `%USERPROFILE%\OneDrive` |
 | ¿El proyecto está dentro de OneDrive? | **NO** |
 
 **Conclusión:** la ruta del proyecto está fuera de OneDrive. Correcto.
@@ -169,14 +177,18 @@ ms-playwright.playwright@1.1.19
 **[RESUELTO — 23/11/2026]** Los cuatro ajustes aplicados con autorización del usuario. Estado verificado con `git config --global --list`:
 
 ```
-core.editor="C:\Users\Owen\AppData\Local\Programs\Microsoft VS Code\bin\code" --wait
+core.editor="%LOCALAPPDATA%\Programs\Microsoft VS Code\bin\code" --wait
 core.autocrlf=false
 core.longpaths=true
 init.defaultbranch=main
 pull.rebase=false
 ```
 
-**Rutas largas en Windows:** `LongPathsEnabled = 0` en el registro, es decir, el límite de 260 caracteres sigue activo en el sistema. Cambiarlo requiere privilegios de administrador y reinicio. **No se considera necesario:** la ruta del proyecto ocupa 61 caracteres, deja margen de sobra, y `core.longpaths` resuelve el caso de Git. Queda documentado por si apareciese el problema.
+_(Salida real de `git config --global --list`, con la carpeta de perfil
+sustituida por su variable de entorno. Ver la nota sobre las rutas del
+encabezado.)_
+
+**Rutas largas en Windows:** `LongPathsEnabled = 0` en el registro, es decir, el límite de 260 caracteres sigue activo en el sistema. Cambiarlo requiere privilegios de administrador y reinicio. **No se considera necesario:** la ruta del proyecto ocupa 62 caracteres (recontada en la Fase 10: el documento decía 61), deja margen de sobra, y `core.longpaths` resuelve el caso de Git. Queda documentado por si apareciese el problema.
 
 ---
 
@@ -226,7 +238,7 @@ Ambas cuentas son gratuitas y suficientes en su plan libre para este proyecto.
 Se confirma como raíz del proyecto:
 
 ```
-C:\Users\Owen\Desktop\Proyecto Final\configurador-presupuestos
+%USERPROFILE%\Desktop\Proyecto Final\configurador-presupuestos
 ```
 
 - Fuera de OneDrive.

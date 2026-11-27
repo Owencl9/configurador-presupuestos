@@ -79,10 +79,13 @@ export function validateClientData(data: ClientData): ClientErrors {
     } else if (!CORREO_PLAUSIBLE.test(email)) {
       /*
        * El ejemplo del mensaje usa `example.com`, que la RFC 2606 reserva, y no
-       * un dominio con aspecto genérico como `dominio.com`: ese está registrado
-       * por alguien, y este texto **viaja en el JS publicado** de un repositorio
-       * público. Es la corrección C7-4, y aquí importa más que en los tests,
-       * porque esto lo lee quien usa la aplicación.
+       * un dominio de aspecto genérico con una extensión real: los que se
+       * usaban antes aquí están registrados por alguien, y este texto **viaja
+       * en el JS publicado** de un repositorio público. Es la corrección C7-4,
+       * y aquí importa más que en los tests, porque esto lo lee quien usa la
+       * aplicación. Los dominios concretos que se retiraron no se escriben en
+       * este archivo a propósito (pendiente nº 20): se describen en lugar de
+       * reproducirlos, que es la norma del apartado 5 de `CLAUDE.md`.
        */
       errores.email =
         'Escribe un correo con el formato nombre@example.com, o déjalo vacío.'

@@ -13,10 +13,19 @@
 # navegador. Un error de formato se ve en treinta segundos en lugar de en cinco
 # minutos.
 #
-# Cuidado con los minutos: el repositorio es privado, así que estas ejecuciones
-# consumen la cuota gratuita de la cuenta y el gasto de pago está bloqueado a
-# 0 $. De ahí vienen tres decisiones de este archivo: el runner estándar, el
-# `concurrency` que cancela lo anterior y el `timeout-minutes`.
+# Sobre los minutos: cuando se escribió este archivo, en la Fase 9, el
+# repositorio era privado, así que cada ejecución consumía la cuota gratuita de
+# la cuenta y el gasto de pago estaba bloqueado a 0 $. De ahí vienen tres
+# decisiones: el runner estándar, el `concurrency` que cancela lo anterior y el
+# `timeout-minutes`.
+#
+# **Desde la Fase 10 el repositorio es público, y en los repositorios públicos
+# Actions no consume cuota.** Las tres decisiones se quedan igual, porque
+# ninguna de ellas era solo por dinero: el `concurrency` evita esperar por una
+# ejecución que el push siguiente ya ha dejado obsoleta, el `timeout-minutes`
+# evita que algo colgado se eternice y el runner estándar sigue siendo el que
+# corresponde a este trabajo. Lo que ha dejado de existir es la restricción de
+# gasto, no el motivo.
 # =============================================================================
 
 name: CI
