@@ -5,6 +5,11 @@
 instalada —decisión suya en la Fase 9— y **el cambio de visibilidad no se
 delega**: es la acción menos reversible del proyecto.
 
+**Estado: completada.** El usuario ejecutó esta lista el **27/11/2026**, y el
+repositorio es público desde esa fecha. El resultado de cada paso, de A0 a C8,
+está registrado en el apartado «Completado en la Fase 11» de
+[PROGRESO.md](../PROGRESO.md).
+
 **Sobre los nombres de los ajustes:** están consultados en la documentación de
 GitHub en la fecha de arriba, no escritos de memoria. Es la lección número 3 de
 la Fase 9: un dato de memoria sobre una herramienta no da un error, da una

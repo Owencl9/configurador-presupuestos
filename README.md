@@ -10,9 +10,10 @@ Trabajo Final de Máster — Máster en Desarrollo con Inteligencia Artificial
 
 **🔗 Aplicación en funcionamiento: https://configurador-presupuestos.vercel.app**
 
-> **Estado: en desarrollo (Fase 7 de 11 completada).** La aplicación ya está
-> desplegada y se actualiza automáticamente con cada `push`. **El recorrido
-> completo funciona**: se añaden servicios del catálogo, se eligen la cantidad y
+> **Estado: terminado. Las doce fases, de la 0 a la 11, están cerradas.** La
+> aplicación está desplegada y se actualiza automáticamente con cada `push`.
+> **El recorrido completo funciona**: se añaden servicios del catálogo, se
+> eligen la cantidad y
 > los meses respetando los mínimos de cada servicio, y el resumen se actualiza al
 > instante con el pago inicial, la cuota mensual y el pago anual, cada uno con
 > sus descuentos —**explicando el motivo de cada uno**—, su base imponible, su
@@ -25,8 +26,8 @@ Trabajo Final de Máster — Máster en Desarrollo con Inteligencia Artificial
 > vigilada**: 560 tests de Vitest, 5 recorridos de Playwright en un navegador
 > real, reglas automáticas de accesibilidad en el lint, un gancho de pre-commit
 > y un workflow de integración continua que repite las seis comprobaciones en
-> cada push. Lo que queda es la entrega: repositorio público y documentación
-> final.
+> cada push. El repositorio es **público** desde el 27/11/2026, tras la revisión
+> de secretos de la Fase 10, y la documentación de la entrega está escrita.
 
 > ### ⚠️ Los precios son ficticios
 >
@@ -457,9 +458,10 @@ lo comprueban sobre el contenido real del navegador.
 - ✅ `Content-Security-Policy` estricta, vigilada por los tests E2E, y
   Dependabot para las dependencias y para las acciones del workflow
 
-### Previstas
+### Fuera del repositorio
 
-- Slides y vídeo de demostración (Fase 11)
+Las diapositivas y el vídeo de demostración se entregan aparte, junto con la
+entrega del máster.
 
 ## Despliegue
 
@@ -571,6 +573,8 @@ lea. Las alertas de seguridad son otra cosa y no dependen de ese calendario.
 
 ## Documentación
 
+- [Cómo he desarrollado esta aplicación con IA](docs/desarrollo-con-ia.md) — el
+  proceso, el uso de la IA, las decisiones y los problemas
 - [Especificación del proyecto](docs/prompt-maestro.md)
 - [Decisiones previas al desarrollo](docs/decisiones-previas.md)
 - [Inventario del entorno (Fase 0)](docs/fase-00-inventario-entorno.md)

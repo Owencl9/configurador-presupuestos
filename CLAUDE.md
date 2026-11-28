@@ -86,10 +86,11 @@ No revertir ninguno de los tres ni confiar en `core.autocrlf`.
 
 ## 5. Seguridad
 
-- El repositorio es **privado hasta la Fase 10**, y se hará público tras la
-  revisión de secretos. Esto cambia el apartado 5 del prompt maestro, que lo daba
-  por público desde el principio. **Privado no relaja ninguna norma**: el
-  historial que se escribe ahora es el que se publicará.
+- El repositorio fue **privado hasta la Fase 10** y es **público desde el
+  27/11/2026**, tras la revisión de secretos. Esto cambió el apartado 5 del
+  prompt maestro, que lo daba por público desde el principio. **Privado no
+  relaja ninguna norma**: el historial que se escribe ahora es el que se
+  publicará.
 - Nunca incluir claves, tokens, contraseñas ni datos personales en el código.
 - **Revisar antes de cada commit que no entra información sensible, buscando
   categorías de datos y no archivos concretos.** Una lista de archivos
