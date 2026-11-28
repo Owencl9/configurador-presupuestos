@@ -10,6 +10,10 @@ que la publicación del repositorio había dejado desfasadas, y se registra el
 resultado de la lista A0–C8 que el usuario ejecutó a mano el 27/11. La
 aplicación sigue **funcionalmente completa** y **no ha cambiado**: siguen **560
 tests de Vitest y 5 recorridos de Playwright**.
+**Verificado en producción** (commit `ddcbdcb`): **CI #8 en Success**, los dos
+checks del commit en verde con el despliegue de Vercel completado, y la
+aplicación comprobada en el navegador con recarga forzada. **La Fase 11 queda
+verificada, y con ella el proyecto.**
 **Repositorio:** https://github.com/Owencl9/configurador-presupuestos
 (**público** desde el 27/11/2026, tras la revisión de secretos de la Fase 10)
 **Aplicación desplegada:** https://configurador-presupuestos.vercel.app
@@ -3182,6 +3186,29 @@ un DNI de forma real, y la de la 11 una referencia a un PDF.
 
 ---
 
+## Verificación en producción (commit `ddcbdcb`)
+
+Comprobado por el usuario en GitHub y en el navegador. **La Fase 11 queda
+verificada.**
+
+| Qué se comprobó             | Resultado                                                                                   |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| El workflow sobre `ddcbdcb` | **CI #8 en Success**: 1 m 14 s en total, 1 m 11 s el job                                    |
+| Los tests en el runner      | **45 archivos y 560 tests de Vitest** en verde, y los **5 recorridos de Playwright** en 9 s |
+| El informe de Playwright    | saltado (0 s) y sin artefactos, que es lo que corresponde cuando ningún recorrido falla     |
+| Los checks del commit       | «All checks have passed», **2 de 2**: CI y Vercel con «Deployment has completed»            |
+| La aplicación publicada     | carga con sus estilos y funciona, comprobada con recarga forzada                            |
+
+**La numeración de las ejecuciones, para que no se lea mal:** la **#8** es la de
+este commit. Las #4, #5 y #6 fueron los tres pull requests de Dependabot y la
+#7, el commit `7ed6a31`.
+
+Esta verificación no prueba código nuevo, porque la fase no lo trae. Lo que
+demuestra es que los seis pasos del workflow siguen pasando sobre el árbol con la
+documentación de entrega dentro, y que el despliegue sirve el mismo paquete.
+
+---
+
 ## Pendiente y vigilado
 
 | #   | Asunto                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Cuándo               |
@@ -3223,9 +3250,10 @@ un DNI de forma real, y la de la 11 una referencia a un PDF.
 
 ## Siguiente paso
 
-**El proyecto está cerrado.** Las doce fases, de la 0 a la 11, están cerradas, y
-la última no ha tocado código: la aplicación que se entrega es la misma que
-verificaron en producción las fases 7, 8, 9 y 10.
+**El proyecto está cerrado y verificado.** Las doce fases, de la 0 a la 11,
+están cerradas, y la última no ha tocado código: la aplicación que se entrega es
+la misma que verificaron en producción las fases 7, 8, 9 y 10, y la verificación
+de la Fase 11 lo vuelve a confirmar.
 
 Lo que queda no es desarrollo:
 
